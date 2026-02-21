@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KNOCKOUT! — Retro Boxing</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box
+    }
+
+    body {
+      background: #0a0a0a;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Press Start 2P', monospace;
+      overflow: hidden;
+      cursor: crosshair
+    }
+
+    #wrapper {
+      position: relative;
+      image-rendering: pixelated
+    }
+
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+      border: 4px solid #333;
+      box-shadow: 0 0 40px rgba(255, 100, 50, .15), inset 0 0 80px rgba(0, 0, 0, .3)
+    }
+
+    #scanlines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(0deg, rgba(0, 0, 0, .08) 0px, rgba(0, 0, 0, .08) 1px, transparent 1px, transparent 3px);
+      pointer-events: none;
+      border: 4px solid transparent
+    }
+
+    #controls {
+      color: #555;
+      font-size: 7px;
+      text-align: center;
+      margin-top: 10px;
+      line-height: 2.2
+    }
+
+    #controls span {
+      color: #f85
+    }
+  </style>
+</head>
+
+<body>
+  <div>
+    <div id="wrapper">
+      <canvas id="game" width="640" height="400"></canvas>
+      <div id="scanlines"></div>
+    </div>
+    <div id="controls">
+      <span>A/D</span> MOVE &nbsp; <span>W</span> BLOCK &nbsp;
+      <span>J</span> JAB &nbsp; <span>K</span> CROSS &nbsp;
+      <span>L</span> HOOK &nbsp; <span>I</span> UPPERCUT &nbsp;
+      <span>U</span> BODY &nbsp; <span>SPACE</span> JUMP<br>
+      <span>2xA/D+J</span> DASH PUNCH &nbsp; <span>MOUSE</span> AIM
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    //  KNOCKOUT! v2 — Retro 2D Boxing Game (Full Overhaul)
+    // ============================================================
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+
+    // ── Mouse tracking ──
+    let mouseX = W / 2, mouseY = H / 2;
+    const canvasRect = () => canvas.getBoundingClientRect();
+    canvas.addEventListener('mousemove', e => {
+      const r = canvasRect();
+      mouseX = (e.clientX - r.left) * (W / r.width);
+      mouseY = (e.clientY - r.top) * (H / r.height);
+    });
+
+    // ── Color Palette ──
+    const C = {
+      bg: '#1a1020', ring: '#2a1a30', ropes: '#e84040', ropeShadow: '#a02020',
+      post: '#c8a860', floor: '#3a2a40', floorLine: '#4a3a55',
+      p1: '#4488ff', p1dark: '#2255bb', p1skin: '#ffcc88', p1glove: '#ff4444',
+      p2: '#ff5533', p2dark: '#bb2211', p2skin: '#eebb77', p2glove: '#4444ff',
+      white: '#ffffff', black: '#000000',
+      hpGreen: '#44dd44', hpYellow: '#dddd44', hpRed: '#dd4444',
+      stamina: '#44aaff', gold: '#ffdd44', textShadow: '#220a00',
+    };
+
+    // ── Game State ──
+    let gameState = 'TITLE';
+    let roundNumber = 1, roundTimer = 99, roundTimerAccum = 0;
+    let koTimer = 0, koTarget = null;
+    let shakeX = 0, shakeY = 0, shakeDur = 0;
+    let freezeFrames = 0, particles = [], floatingTexts = [];
+    let flashAlpha = 0, titleBlink = 0;
+    let comboCount = 0, comboTimer = 0, lastAttacker = null;
+    let slowMoTimer = 0, slowMoScale = 1;
+    let ropeVibrationL = 0, ropeVibrationR = 0; // rope vibration amplitude
+    let cameraFlashTimer = 0;
+    let victoryTimer = 0;
+
+    // ── Input ──
+    const keys = {};
+    const keyDownTimes = {};
+    let lastDirTap = { dir: 0, time: 0 };
+    let dashPunchReady = false;
+    window.addEventListener('keydown', e => {
+      if (!keys[e.code]) keyDownTimes[e.code] = performance.now();
+      keys[e.code] = true;
+      e.preventDefault();
+      // Dash punch detection: double-tap A or D
+      const now = performance.now();
+      if (e.code === 'KeyA' || e.code === 'KeyD') {
+        const dir = e.code === 'KeyD' ? 1 : -1;
+        if (dir === lastDirTap.dir && now - lastDirTap.time < 300) {
+          dashPunchReady = true;
+        }
+        lastDirTap = { dir, time: now };
+      }
+    });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // ── Ring ──
+    const RING = { x: 60, y: 180, w: 520, h: 170 };
+    const RING_CENTER_X = RING.x + RING.w / 2;
+
+    // ── Punch Definitions ──
+    const PUNCHES = {
+      jab: { name: 'JAB', dmg: 5, staCost: 8, reach: 45, dur: 250, headMult: 1.3, bodyShot: false, leanX: 0, leanY: 0, armStyle: 'straight' },
+      cross: { name: 'CROSS', dmg: 10, staCost: 25, reach: 55, dur: 400, headMult: 1.5, bodyShot: false, leanX: 3, leanY: 0, armStyle: 'straight' },
+      hook: { name: 'HOOK', dmg: 15, staCost: 35, reach: 35, dur: 380, headMult: 1.8, bodyShot: false, leanX: 5, leanY: 0, armStyle: 'hook' },
+      uppercut: { name: 'UPPERCUT', dmg: 22, staCost: 50, reach: 30, dur: 550, headMult: 2.0, bodyShot: false, leanX: 0, leanY: -3, armStyle: 'uppercut' },
+      bodyshot: { name: 'BODY', dmg: 4, staCost: 10, reach: 30, dur: 250, headMult: 1.0, bodyShot: true, leanX: 4, leanY: 3, armStyle: 'straight', staDmg: 18 },
+      dashpunch: { name: 'DASH', dmg: 12, staCost: 35, reach: 60, dur: 350, headMult: 1.4, bodyShot: false, leanX: 8, leanY: 0, armStyle: 'straight', dashForce: 5 },
+    };
+
+    // ── Floating damage text ──
+    function spawnFloatingText(x, y, text, color) {
+      floatingTexts.push({ x, y, text, color, life: 1.0, vy: -1.5 });
+    }
+
+    // ── Boxer Class ──
+    class Boxer {
+      constructor(x, facing, colors, name, isPlayer = false) {
+        this.x = x;
+        this.groundY = RING.y + RING.h - 10;
+        this.y = this.groundY;
+        this.facing = facing;
+        this.colors = colors;
+        this.name = name;
+        this.isPlayer = isPlayer;
+
+        this.hp = 100; this.maxHp = 100;
+        this.stamina = 100; this.maxStamina = 100;
+        this.score = 0;
+
+        this.vx = 0; this.speed = 3; this.retreatMod = 0.7;
+
+        // Jump
+        this.vy = 0; this.isGrounded = true;
+        this.jumpForce = -8; this.gravity = 0.4;
+
+        // Combat
+        this.attacking = false; this.currentPunch = null;
+        this.attackTimer = 0; this.attackCooldown = 0;
+        this.hitRegistered = false;
+        this.blocking = false; this.blockDmgReduction = 0.7;
+        this.blockStartTime = 0; // for perfect block timing
+
+        // Physics
+        this.knockbackVx = 0;
+
+        // Animation state
+        this.bobPhase = Math.random() * Math.PI * 2;
+        this.hitFlash = 0; this.punchArmExt = 0; this.bodyLean = 0;
+        this.stunTimer = 0;       // stun on heavy headshot
+        this.staggerPhase = 0;   // low HP stagger
+        this.headSnapBack = 0;   // head snap-back on hit
+        this.breathPhase = 0;    // idle breathing
+
+        // Mouse aim offset for player (vertical glove target)
+        this.aimY = 0; // -1 = head, 0 = mid, 1 = body
+      }
+
+      get centerX() { return this.x; }
+      get headY() { return this.y - 55 + Math.sin(this.bobPhase) * 2 + this.breathAnim; }
+      get bodyY() { return this.y - 30; }
+      get breathAnim() { return Math.sin(this.breathPhase) * 1.2; }
+      get isStunned() { return this.stunTimer > 0; }
+
+      update(dt) {
+        this.bobPhase += dt * 4;
+        this.breathPhase += dt * 2.5;
+
+        // Stun timer
+        if (this.stunTimer > 0) { this.stunTimer -= dt; this.attacking = false; }
+
+        // Stagger at low HP
+        if (this.hp / this.maxHp < 0.25) {
+          this.staggerPhase += dt * 6;
+        } else {
+          this.staggerPhase *= 0.9;
+        }
+
+        // Head snap decay
+        this.headSnapBack *= 0.85;
+
+        // Cooldowns
+        if (this.attackCooldown > 0) this.attackCooldown -= dt * 1000;
+        if (this.hitFlash > 0) this.hitFlash -= dt;
+
+        // Attack timer
+        if (this.attacking && !this.isStunned) {
+          this.attackTimer -= dt * 1000;
+          let progress = 1 - (this.attackTimer / this.currentPunch.dur);
+          if (progress < 0.3) this.punchArmExt = progress / 0.3;
+          else if (progress > 0.7) this.punchArmExt = (1 - progress) / 0.3;
+          else this.punchArmExt = 1;
+          if (this.attackTimer <= 0) {
+            this.attacking = false; this.currentPunch = null;
+            this.punchArmExt = 0; this.attackCooldown = 150;
+          }
+        }
+
+        // Stamina regen
+        if (!this.attacking && !this.blocking) {
+          this.stamina = Math.min(this.maxStamina, this.stamina + 12 * dt);
+        }
+
+        // Jump / Gravity
+        this.vy += this.gravity;
+        this.y += this.vy;
+        if (this.y >= this.groundY) {
+          if (!this.isGrounded && Math.abs(this.vy) > 2) spawnHitParticles(this.x, this.groundY, '#aa9977', 4);
+          this.y = this.groundY; this.vy = 0; this.isGrounded = true;
+        } else { this.isGrounded = false; }
+        if (!this.isGrounded) this.blocking = false;
+
+        // Movement + knockback
+        this.x += (this.vx + this.knockbackVx) * dt * 60;
+        this.knockbackVx *= 0.88;
+        if (Math.abs(this.knockbackVx) < 0.1) this.knockbackVx = 0;
+        this.bodyLean += (this.vx * 0.8 - this.bodyLean) * 0.15;
+
+        // Elastic rope bounce
+        const ROPE_ZONE = 35, SPRING_K = 0.35, HARD_EDGE = 15;
+        const leftEdge = RING.x + HARD_EDGE, rightEdge = RING.x + RING.w - HARD_EDGE;
+        const leftPen = (RING.x + ROPE_ZONE) - this.x;
+        if (leftPen > 0) {
+          const force = SPRING_K * leftPen;
+          this.knockbackVx += force;
+          if (force > 1.5) {
+            triggerShake(force * 0.5, force * 40);
+            if (force > 3) { this.vy -= force * 0.3; spawnHitParticles(RING.x, this.y - 30, '#e84040', 3); ropeVibrationL = force * 2; }
+          }
+        }
+        const rightPen = this.x - (RING.x + RING.w - ROPE_ZONE);
+        if (rightPen > 0) {
+          const force = SPRING_K * rightPen;
+          this.knockbackVx -= force;
+          if (force > 1.5) {
+            triggerShake(force * 0.5, force * 40);
+            if (force > 3) { this.vy -= force * 0.3; spawnHitParticles(RING.x + RING.w, this.y - 30, '#e84040', 3); ropeVibrationR = force * 2; }
+          }
+        }
+        if (this.x < leftEdge) { this.x = leftEdge; this.knockbackVx = Math.abs(this.knockbackVx) * 0.3; }
+        if (this.x > rightEdge) { this.x = rightEdge; this.knockbackVx = -Math.abs(this.knockbackVx) * 0.3; }
+        this.vx = 0;
+      }
+
+      move(dir) {
+        if (this.attacking || this.isStunned) return;
+        let spd = this.speed;
+        if ((dir > 0 && this.facing < 0) || (dir < 0 && this.facing > 0)) spd *= this.retreatMod;
+        this.vx = dir * spd;
+      }
+
+      jump() {
+        if (!this.isGrounded || this.attacking || this.isStunned) return;
+        this.vy = this.jumpForce; this.isGrounded = false;
+      }
+
+      punch(type) {
+        if (this.attacking || this.attackCooldown > 0 || this.blocking || !this.isGrounded || this.isStunned) return;
+        const p = PUNCHES[type];
+        if (!p || this.stamina < p.staCost) return;
+        this.stamina -= p.staCost;
+        this.attacking = true; this.currentPunch = p;
+        this.attackTimer = p.dur; this.hitRegistered = false;
+        // Dash punch forward burst
+        if (p.dashForce) this.knockbackVx += this.facing * p.dashForce;
+      }
+
+      getHitbox() {
+        if (!this.attacking || !this.currentPunch || this.hitRegistered) return null;
+        const ext = this.punchArmExt;
+        if (ext < 0.7) return null;
+        const p = this.currentPunch;
+        const hx = this.x + this.facing * (15 + p.reach * ext);
+        // Mouse aim shifts hitbox Y for player
+        let hy = this.headY - 5 + (this.isPlayer ? this.aimY * 15 : 0);
+        if (p.bodyShot) hy = this.bodyY - 5;
+        return { x: hx - 12, y: hy, w: 24, h: p.bodyShot ? 20 : 30 };
+      }
+
+      getHurtbox() {
+        return { x: this.x - 14, y: this.headY - 10, w: 28, h: 65 };
+      }
+
+      takeDamage(dmg, attackerX, punch, isHead) {
+        let finalDmg = dmg;
+        // Perfect block: if block started < 150ms ago, extra reduction
+        let perfectBlock = false;
+        if (this.blocking) {
+          const blockDur = performance.now() - this.blockStartTime;
+          if (blockDur < 150) {
+            finalDmg *= 0.1; // 90% reduction on perfect block
+            perfectBlock = true;
+            spawnFloatingText(this.x, this.headY - 20, 'PERFECT!', '#44ffff');
+          } else {
+            finalDmg *= (1 - this.blockDmgReduction);
+          }
+          this.stamina -= (perfectBlock ? dmg * 0.1 : dmg * 0.3);
+        }
+
+        // Body shot: extra stamina damage
+        if (punch && punch.bodyShot) {
+          this.stamina -= (punch.staDmg || 15);
+          if (this.stamina < 0) this.stamina = 0;
+        }
+
+        this.hp -= finalDmg;
+        this.hitFlash = 0.15;
+
+        // Head snap-back on heavy hit
+        if (isHead && finalDmg > 8) {
+          this.headSnapBack = Math.min(8, finalDmg * 0.4) * (attackerX < this.x ? 1 : -1);
+        }
+
+        // Stun on strong headshot
+        if (isHead && finalDmg > 18 && !this.blocking) {
+          this.stunTimer = 0.4 + finalDmg * 0.01;
+          spawnFloatingText(this.x, this.headY - 30, 'STUN!', '#ffff44');
+        }
+
+        // Knockback + uppercut vertical launch
+        const dir = attackerX < this.x ? 1 : -1;
+        this.knockbackVx += dir * (finalDmg * 0.25);
+        if (punch && punch.name === 'UPPERCUT' && finalDmg > 10) {
+          this.vy -= Math.min(4, finalDmg * 0.12);
+        }
+
+        // Floating damage number
+        if (finalDmg > 0.5) {
+          const col = isHead ? '#ffff44' : (punch && punch.bodyShot ? '#44aaff' : '#ff8844');
+          spawnFloatingText(this.x + (Math.random() - 0.5) * 20, this.headY - 15, Math.round(finalDmg).toString(), col);
+        }
+      }
+
+      draw(ctx) {
+        const bob = Math.sin(this.bobPhase) * 2 + this.breathAnim;
+        const stagger = Math.sin(this.staggerPhase) * (this.hp / this.maxHp < 0.25 ? 2 : 0);
+        const lean = this.bodyLean + stagger;
+        const f = this.facing;
+        const flash = this.hitFlash > 0;
+        const punchLean = this.currentPunch ? this.currentPunch.leanX * this.punchArmExt * f : 0;
+        const punchLeanY = this.currentPunch ? this.currentPunch.leanY * this.punchArmExt : 0;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Shadow
+        const jumpH = this.groundY - this.y;
+        const ss = Math.max(0.3, 1 - jumpH / 80);
+        ctx.fillStyle = `rgba(0,0,0,${0.3 * ss})`;
+        ctx.beginPath();
+        ctx.ellipse(0, this.groundY - this.y + 2, 18 * ss, 5 * ss, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Legs
+        ctx.strokeStyle = flash ? '#fff' : this.colors.dark;
+        ctx.lineWidth = 4; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(-f * 4 + lean + punchLean, -10 + bob + punchLeanY); ctx.lineTo(-f * 10, 0); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(f * 4 + lean + punchLean, -10 + bob + punchLeanY); ctx.lineTo(f * 10, 0); ctx.stroke();
+
+        // Shorts
+        ctx.fillStyle = flash ? '#fff' : this.colors.main;
+        ctx.fillRect(-8 + lean + punchLean, -18 + bob + punchLeanY, 16, 10);
+
+        // Torso
+        ctx.fillStyle = flash ? '#fff' : this.colors.skin;
+        ctx.fillRect(-7 + lean + punchLean, -38 + bob + punchLeanY, 14, 22);
+
+        // Arms & Gloves
+        const gc = flash ? '#fff' : this.colors.glove;
+        const ac = flash ? '#fff' : this.colors.skin;
+
+        // Back arm
+        ctx.strokeStyle = ac; ctx.lineWidth = 4;
+        const bax = -f * 8 + lean + punchLean, baex = -f * 14 + lean + punchLean;
+        const bay = -32 + bob + punchLeanY, baey = -26 + bob + (this.blocking ? -8 : 0) + punchLeanY;
+        ctx.beginPath(); ctx.moveTo(bax, bay); ctx.lineTo(baex, baey); ctx.stroke();
+        ctx.fillStyle = gc; ctx.beginPath(); ctx.arc(baex, baey, 5, 0, Math.PI * 2); ctx.fill();
+
+        // Front arm (punching)
+        ctx.strokeStyle = ac; ctx.lineWidth = 4;
+        const ext = this.punchArmExt;
+        let fex = f * 14 + lean + punchLean, fey = -32 + bob + punchLeanY;
+        if (this.attacking && this.currentPunch) {
+          const p = this.currentPunch;
+          if (p.armStyle === 'hook') {
+            fex = f * (14 + p.reach * ext * 0.6) + lean + punchLean;
+            fey = -30 + bob - ext * 4 + punchLeanY;
+          } else if (p.armStyle === 'uppercut') {
+            fex = f * (14 + p.reach * ext * 0.5) + lean + punchLean;
+            fey = -32 + bob - ext * 12 + punchLeanY;
+          } else {
+            fex = f * (14 + p.reach * ext) + lean + punchLean;
+            fey = -32 + bob + punchLeanY;
+          }
+        }
+        if (this.blocking) { fex = f * 6 + lean; fey = -34 + bob; }
+        // Stun wobble
+        if (this.isStunned) { fex += Math.sin(performance.now() * 0.02) * 4; fey += Math.cos(performance.now() * 0.015) * 3; }
+
+        ctx.beginPath(); ctx.moveTo(f * 8 + lean + punchLean, -32 + bob + punchLeanY); ctx.lineTo(fex, fey); ctx.stroke();
+        ctx.fillStyle = gc; ctx.beginPath(); ctx.arc(fex, fey, 6, 0, Math.PI * 2); ctx.fill();
+
+        // Head (with snap-back)
+        const headOff = this.headSnapBack;
+        ctx.fillStyle = flash ? '#fff' : this.colors.skin;
+        ctx.beginPath(); ctx.arc(lean + punchLean + headOff, -44 + bob + punchLeanY, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = flash ? '#fff' : this.colors.dark;
+        ctx.beginPath(); ctx.arc(lean + punchLean + headOff, -48 + bob + punchLeanY, 10, Math.PI, Math.PI * 2); ctx.fill();
+        // Eye
+        ctx.fillStyle = C.black;
+        if (!this.isStunned) {
+          ctx.fillRect(lean + punchLean + headOff + f * 3, -45 + bob + punchLeanY, 2, 2);
+        } else {
+          // Stunned X eyes
+          ctx.font = '5px monospace';
+          ctx.fillText('x', lean + punchLean + headOff + f * 1, -43 + bob + punchLeanY);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // ── Fighters ──
+    let player, enemy;
+    function resetFighters() {
+      player = new Boxer(RING.x + 120, 1, { main: C.p1, dark: C.p1dark, skin: C.p1skin, glove: C.p1glove }, 'PLAYER', true);
+      enemy = new Boxer(RING.x + RING.w - 120, -1, { main: C.p2, dark: C.p2dark, skin: C.p2skin, glove: C.p2glove }, 'CPU', false);
+    }
+    function resetRound() {
+      resetFighters();
+      roundTimer = 99; roundTimerAccum = 0;
+      particles = []; floatingTexts = [];
+      flashAlpha = 0; freezeFrames = 0; shakeDur = 0;
+      comboCount = 0; comboTimer = 0;
+      slowMoTimer = 0; slowMoScale = 1;
+      ropeVibrationL = 0; ropeVibrationR = 0;
+      victoryTimer = 0;
+      gameState = 'FIGHTING';
+    }
+    function startGame() {
+      roundNumber = 1;
+      if (player) player.score = 0;
+      if (enemy) enemy.score = 0;
+      resetRound();
+    }
+
+    // ── Smart AI Controller ──
+    const AI = {
+      state: 'IDLE', lastDecision: 0, comboStep: 0, comboSeq: null,
+      feinting: false, feintTimer: 0,
+
+      getReactionDelay() { return Math.max(200, 700 - roundNumber * 50) + Math.random() * 200; },
+      getAggression() { return Math.min(0.95, 0.3 + roundNumber * 0.08); },
+
+      update(dt, cpu, target) {
+        const now = performance.now();
+        const dist = Math.abs(cpu.x - target.x);
+        const tHpPct = target.hp / target.maxHp;
+        const cHpPct = cpu.hp / cpu.maxHp;
+        const cStaPct = cpu.stamina / cpu.maxStamina;
+        const tStaPct = target.stamina / target.maxStamina;
+        const aggression = this.getAggression();
+
+        // Feint timer
+        if (this.feinting) { this.feintTimer -= dt * 1000; if (this.feintTimer <= 0) this.feinting = false; }
+
+        if (now - this.lastDecision > this.getReactionDelay()) {
+          this.lastDecision = now;
+
+          // Counterattack: if target just whiffed (attacking but no hit registered and timer almost done)
+          if (target.attacking && !target.hitRegistered && target.attackTimer < 100 && dist < 80) {
+            this.state = 'COUNTER';
+          } else if (cpu.stamina < 20) {
+            this.state = 'RETREAT';
+          } else if (dist > 180) {
+            this.state = 'CHASE';
+          } else if (dist < 40) {
+            this.state = Math.random() < 0.4 ? 'RETREAT' : 'PRESSURE';
+          } else if (dist <= 100 && cStaPct > 0.3) {
+            this.state = Math.random() < aggression ? 'ATTACK' : 'IDLE';
+          } else {
+            this.state = 'IDLE';
+          }
+        }
+
+        const dir = target.x > cpu.x ? 1 : -1;
+        cpu.blocking = false;
+
+        switch (this.state) {
+          case 'CHASE': cpu.move(dir); break;
+          case 'RETREAT':
+            cpu.move(-dir);
+            cpu.blocking = Math.random() < 0.6;
+            break;
+          case 'COUNTER':
+            cpu.move(dir * 0.5);
+            if (!cpu.attacking && Math.random() < 0.25) {
+              const r = Math.random();
+              if (r < 0.3) cpu.punch('hook');
+              else if (r < 0.6) cpu.punch('cross');
+              else cpu.punch('uppercut');
+            }
+            break;
+          case 'PRESSURE':
+            cpu.move(dir * 0.3);
+            if (!cpu.attacking && Math.random() < 0.12) {
+              // Target head when low HP
+              if (tHpPct < 0.3 && Math.random() < 0.6) {
+                cpu.punch(Math.random() < 0.5 ? 'hook' : 'uppercut');
+              }
+              // Body shot when target low stamina
+              else if (tStaPct < 0.4 && Math.random() < 0.5) {
+                cpu.punch('bodyshot');
+              } else {
+                cpu.punch('jab');
+              }
+            }
+            break;
+          case 'ATTACK':
+            if (dist > 70) cpu.move(dir * 0.5);
+            if (!cpu.attacking) {
+              // Attempt combos at higher rounds
+              if (this.comboSeq && this.comboStep < this.comboSeq.length) {
+                if (Math.random() < 0.15) {
+                  cpu.punch(this.comboSeq[this.comboStep]);
+                  this.comboStep++;
+                }
+              } else if (Math.random() < 0.08 + roundNumber * 0.01) {
+                // Start a combo or single punch
+                const r = Math.random();
+                if (r < 0.15 && roundNumber >= 2) {
+                  this.comboSeq = ['jab', 'cross', 'hook'];
+                  this.comboStep = 0;
+                  cpu.punch('jab');
+                  this.comboStep = 1;
+                } else if (r < 0.35) cpu.punch('jab');
+                else if (r < 0.55) cpu.punch('cross');
+                else if (r < 0.7) cpu.punch('hook');
+                else if (r < 0.82) cpu.punch('uppercut');
+                else if (r < 0.9) cpu.punch('bodyshot');
+                else {
+                  // Feint: fake start without actual punch
+                  this.feinting = true;
+                  this.feintTimer = 200;
+                }
+              }
+              // Occasional jump attack
+              if (Math.random() < 0.003) cpu.jump();
+            }
+            break;
+          case 'IDLE':
+            if (Math.random() < 0.03) cpu.move(dir * 0.3);
+            cpu.blocking = Math.random() < 0.15 + roundNumber * 0.03;
+            if (Math.random() < 0.004) cpu.jump();
+            break;
+        }
+      }
+    };
+
+    // ── Particles ──
+    function spawnHitParticles(x, y, color, count) {
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x, y, vx: (Math.random() - 0.5) * 6, vy: -Math.random() * 4 - 1,
+          life: 0.3 + Math.random() * 0.3, color, size: 2 + Math.random() * 3
+        });
+      }
+    }
+    function updateParticles(dt) {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 6 * dt; p.life -= dt;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        const t = floatingTexts[i]; t.y += t.vy; t.life -= dt;
+        if (t.life <= 0) floatingTexts.splice(i, 1);
+      }
+    }
+    function drawParticles(ctx) {
+      for (const p of particles) {
+        ctx.globalAlpha = Math.max(0, p.life * 3);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(Math.round(p.x), Math.round(p.y), Math.round(p.size), Math.round(p.size));
+      }
+      ctx.globalAlpha = 1;
+      // Floating text
+      ctx.font = '6px "Press Start 2P"'; ctx.textAlign = 'center';
+      for (const t of floatingTexts) {
+        ctx.globalAlpha = Math.max(0, t.life);
+        ctx.fillStyle = '#000'; ctx.fillText(t.text, t.x + 1, t.y + 1);
+        ctx.fillStyle = t.color; ctx.fillText(t.text, t.x, t.y);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Hit Detection ──
+    function checkHits() { doHitCheck(player, enemy); doHitCheck(enemy, player); }
+    function doHitCheck(attacker, victim) {
+      const hb = attacker.getHitbox();
+      if (!hb) return;
+      const hr = victim.getHurtbox();
+      if (hb.x < hr.x + hr.w && hb.x + hb.w > hr.x && hb.y < hr.y + hr.h && hb.y + hb.h > hr.y) {
+        attacker.hitRegistered = true;
+        const hitY = hb.y + hb.h / 2;
+        const headZone = victim.headY + 5;
+        let dmg = attacker.currentPunch.dmg;
+        let isHead = hitY < headZone && !attacker.currentPunch.bodyShot;
+        if (isHead) dmg *= attacker.currentPunch.headMult;
+
+        victim.takeDamage(dmg, attacker.x, attacker.currentPunch, isHead);
+
+        // Combo counter
+        if (attacker === lastAttacker && comboTimer > 0) {
+          comboCount++;
+        } else { comboCount = 1; }
+        lastAttacker = attacker; comboTimer = 1.5;
+
+        // Screen shake (extra for uppercut)
+        let shakeI = dmg * 0.3;
+        if (attacker.currentPunch.name === 'UPPERCUT') shakeI *= 1.5;
+        triggerShake(shakeI, dmg * 12);
+
+        freezeFrames = Math.floor(dmg * 0.15);
+
+        const px = hb.x + hb.w / 2, py = hb.y + hb.h / 2;
+        spawnHitParticles(px, py, isHead ? '#ffff44' : '#ff8844', isHead ? 8 : 4);
+        if (isHead && dmg > 15) flashAlpha = 0.3;
+
+        // KO check
+        if (victim.hp <= 0) {
+          victim.hp = 0;
+          // Slow-mo on final hit
+          slowMoTimer = 1.0;
+          slowMoScale = 0.2;
+          gameState = 'KO'; koTimer = 3; koTarget = victim;
+          triggerShake(8, 600);
+          spawnHitParticles(px, py, '#ffffff', 20);
+          cameraFlashTimer = 0.5;
+        }
+      }
+    }
+
+    function triggerShake(intensity, duration) {
+      shakeDur = Math.max(shakeDur, duration);
+      shakeX = (Math.random() - 0.5) * intensity; shakeY = (Math.random() - 0.5) * intensity;
+    }
+
+    // ── Drawing ──
+    function drawRing(ctx) {
+      // Floor
+      ctx.fillStyle = C.floor;
+      ctx.fillRect(RING.x - 10, RING.y + RING.h - 8, RING.w + 20, 50);
+      ctx.strokeStyle = C.floorLine; ctx.lineWidth = 1;
+      for (let i = 0; i < 12; i++) {
+        const lx = RING.x + i * (RING.w / 11);
+        ctx.beginPath(); ctx.moveTo(lx, RING.y + RING.h - 8); ctx.lineTo(lx + (i < 6 ? -15 : 15), RING.y + RING.h + 40); ctx.stroke();
+      }
+
+      // Ring mat with subtle texture
+      ctx.fillStyle = C.ring;
+      ctx.fillRect(RING.x, RING.y, RING.w, RING.h);
+      // Texture dots
+      ctx.fillStyle = '#352040';
+      for (let tx = RING.x + 10; tx < RING.x + RING.w; tx += 20) {
+        for (let ty = RING.y + 10; ty < RING.y + RING.h; ty += 20) {
+          if (Math.sin(tx * ty * 0.1) > 0.5) ctx.fillRect(tx, ty, 2, 2);
+        }
+      }
+
+      // Center logo (pixel "K.O.")
+      ctx.fillStyle = '#3a2248'; ctx.font = '14px "Press Start 2P"'; ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.15;
+      ctx.fillText('K.O.', RING_CENTER_X, RING.y + RING.h / 2 + 5);
+      ctx.globalAlpha = 1;
+
+      // Center line
+      ctx.strokeStyle = '#4a3050'; ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath(); ctx.moveTo(RING_CENTER_X, RING.y + 10); ctx.lineTo(RING_CENTER_X, RING.y + RING.h - 10); ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Posts
+      const posts = [[RING.x, RING.y], [RING.x + RING.w, RING.y], [RING.x, RING.y + RING.h], [RING.x + RING.w, RING.y + RING.h]];
+      for (const [px, py] of posts) {
+        ctx.fillStyle = C.post; ctx.fillRect(px - 5, py - 8, 10, 16);
+        ctx.fillStyle = '#aa8844'; ctx.fillRect(px - 4, py - 6, 8, 4);
+      }
+
+      // Ropes with elastic deformation + vibration
+      ropeVibrationL *= 0.92; ropeVibrationR *= 0.92;
+      for (let r = 0; r < 3; r++) {
+        const ry = RING.y + 15 + r * 28;
+        let lbx = 0, lby = 0, rbx = 0, rby = 0;
+        const RZ = 35;
+        [player, enemy].forEach(b => {
+          if (!b) return;
+          const ld = b.x - RING.x;
+          if (ld < RZ) { const t = Math.max(0, 1 - ld / RZ); lbx = Math.min(lbx, -t * 18); lby = Math.max(lby, t * 4); }
+          const rd = (RING.x + RING.w) - b.x;
+          if (rd < RZ) { const t = Math.max(0, 1 - rd / RZ); rbx = Math.max(rbx, t * 18); rby = Math.max(rby, t * 4); }
+        });
+        // Add vibration
+        const vibL = Math.sin(performance.now() * 0.03 + r) * ropeVibrationL;
+        const vibR = Math.sin(performance.now() * 0.03 + r + 1) * ropeVibrationR;
+
+        // Shadow
+        ctx.strokeStyle = C.ropeShadow; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(RING.x + lbx, ry + 2 + lby + vibL);
+        ctx.quadraticCurveTo(RING.x + RING.w / 2, ry + 2, RING.x + RING.w + rbx, ry + 2 + rby + vibR); ctx.stroke();
+        // Main
+        ctx.strokeStyle = C.ropes; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(RING.x + lbx, ry + lby + vibL);
+        ctx.quadraticCurveTo(RING.x + RING.w / 2, ry, RING.x + RING.w + rbx, ry + rby + vibR); ctx.stroke();
+      }
+
+      // Spotlight glow
+      const grd = ctx.createRadialGradient(RING_CENTER_X, RING.y - 20, 10, RING_CENTER_X, RING.y + RING.h / 2, 300);
+      grd.addColorStop(0, 'rgba(255,240,200,0.06)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(RING.x - 20, RING.y - 40, RING.w + 40, RING.h + 60);
+    }
+
+    function drawAudience(ctx) {
+      // Two rows for parallax
+      const now = performance.now();
+      // Back row (darker, less movement)
+      ctx.fillStyle = '#080412';
+      ctx.fillRect(0, 80, W, 50);
+      const backHeads = [40, 85, 130, 175, 220, 270, 320, 365, 410, 455, 500, 545, 590, 630];
+      for (const hx of backHeads) {
+        const hy = 115 + Math.sin(hx * 0.3 + now * 0.001) * 2;
+        ctx.fillStyle = '#120a1e';
+        ctx.beginPath(); ctx.arc(hx, hy, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(hx - 6, hy + 5, 12, 10);
+      }
+      // Front row (more detail)
+      ctx.fillStyle = '#0d0818';
+      ctx.fillRect(0, 120, W, 55);
+      const frontHeads = [60, 100, 145, 190, 230, 280, 330, 370, 420, 460, 510, 550, 590];
+      const crowdColors = ['#1a0f28', '#1e1230', '#16102a', '#201438', '#1a1028'];
+      for (let i = 0; i < frontHeads.length; i++) {
+        const hx = frontHeads[i];
+        const hy = 148 + Math.sin(hx * 0.5 + now * 0.002) * 3;
+        ctx.fillStyle = crowdColors[i % crowdColors.length];
+        ctx.beginPath(); ctx.arc(hx, hy, 10, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(hx - 8, hy + 6, 16, 15);
+        // Waving arms (random audience members)
+        if (i % 3 === Math.floor(now / 800) % 3) {
+          ctx.strokeStyle = crowdColors[i % crowdColors.length];
+          ctx.lineWidth = 2;
+          const armAngle = Math.sin(now * 0.005 + i) * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(hx + (i % 2 ? 6 : -6), hy + 4);
+          ctx.lineTo(hx + (i % 2 ? 14 : -14), hy - 6 + Math.sin(now * 0.008 + i) * 8);
+          ctx.stroke();
+        }
+      }
+      // Camera flashes
+      if (cameraFlashTimer > 0 || Math.random() < 0.003) {
+        const fx = frontHeads[Math.floor(Math.random() * frontHeads.length)];
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.beginPath(); ctx.arc(fx, 140, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,200,0.15)';
+        ctx.beginPath(); ctx.arc(fx, 140, 12, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    function drawHUD(ctx) {
+      const barW = 180, barH = 14, margin = 20;
+      drawBar(ctx, margin, 20, barW, barH, player.hp, player.maxHp, hpColor(player.hp, player.maxHp), 'left');
+      drawBar(ctx, margin, 38, barW * 0.6, 8, player.stamina, player.maxStamina, C.stamina, 'left');
+      drawName(ctx, margin, 56, player.name, C.p1, 'left');
+      const p2x = W - margin;
+      drawBar(ctx, p2x, 20, barW, barH, enemy.hp, enemy.maxHp, hpColor(enemy.hp, enemy.maxHp), 'right');
+      drawBar(ctx, p2x, 38, barW * 0.6, 8, enemy.stamina, enemy.maxStamina, C.stamina, 'right');
+      drawName(ctx, p2x, 56, enemy.name, C.p2, 'right');
+
+      ctx.fillStyle = C.gold; ctx.font = '10px "Press Start 2P"'; ctx.textAlign = 'center';
+      ctx.fillText('ROUND ' + roundNumber, W / 2, 20);
+      ctx.font = '20px "Press Start 2P"';
+      ctx.fillText(Math.ceil(roundTimer).toString(), W / 2, 46);
+
+      ctx.font = '8px "Press Start 2P"';
+      ctx.fillStyle = C.p1; ctx.textAlign = 'left'; ctx.fillText(player.score.toString(), margin, 76);
+      ctx.fillStyle = C.p2; ctx.textAlign = 'right'; ctx.fillText(enemy.score.toString(), W - margin, 76);
+
+      // Combo counter
+      if (comboCount >= 2 && comboTimer > 0) {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = comboCount >= 5 ? '#ff4444' : comboCount >= 3 ? '#ffaa44' : '#ffdd44';
+        ctx.font = '12px "Press Start 2P"';
+        const cx = lastAttacker === player ? margin + 90 : W - margin - 90;
+        ctx.globalAlpha = Math.min(1, comboTimer);
+        ctx.fillText(comboCount + ' HIT COMBO!', cx, 90);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    function drawBar(ctx, x, y, w, h, val, max, color, align) {
+      const bx = align === 'right' ? x - w : x, pct = Math.max(0, val / max);
+      ctx.fillStyle = '#1a1a1a'; ctx.fillRect(bx, y, w, h);
+      ctx.fillStyle = color;
+      if (align === 'right') ctx.fillRect(bx + w * (1 - pct), y, w * pct, h);
+      else ctx.fillRect(bx, y, w * pct, h);
+      ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.strokeRect(bx, y, w, h);
+    }
+    function drawName(ctx, x, y, name, color, align) {
+      ctx.font = '8px "Press Start 2P"'; ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(name, x, y);
+    }
+    function hpColor(hp, max) { const p = hp / max; return p > 0.5 ? C.hpGreen : p > 0.25 ? C.hpYellow : C.hpRed; }
+
+    function drawVignette(ctx) {
+      const grd = ctx.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 380);
+      grd.addColorStop(0, 'rgba(0,0,0,0)');
+      grd.addColorStop(1, 'rgba(0,0,0,0.4)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    function drawTitle(ctx) {
+      ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+      drawAudience(ctx); drawRing(ctx);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = C.textShadow; ctx.font = '28px "Press Start 2P"';
+      ctx.fillText('KNOCKOUT!', W / 2 + 2, 100 + 2);
+      ctx.fillStyle = C.gold; ctx.fillText('KNOCKOUT!', W / 2, 100);
+      ctx.fillStyle = C.ropes; ctx.font = '10px "Press Start 2P"';
+      ctx.fillText('RETRO BOXING', W / 2, 130);
+      titleBlink += 0.05;
+      if (Math.sin(titleBlink) > 0) {
+        ctx.fillStyle = C.white; ctx.font = '10px "Press Start 2P"';
+        ctx.fillText('PRESS SPACE TO FIGHT', W / 2, 300);
+      }
+      ctx.fillStyle = '#666'; ctx.font = '6px "Press Start 2P"';
+      ctx.fillText('WASD+JKLIU MOUSE AIM  SPACE JUMP', W / 2, 340);
+      drawVignette(ctx);
+    }
+
+    function drawKO(ctx) {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#000a'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = C.hpRed; ctx.font = '32px "Press Start 2P"';
+      ctx.fillText('K.O.!', W / 2, H / 2 - 20);
+      const winner = koTarget === enemy ? 'PLAYER' : 'CPU';
+      ctx.fillStyle = C.gold; ctx.font = '12px "Press Start 2P"';
+      ctx.fillText(winner + ' WINS THE ROUND!', W / 2, H / 2 + 20);
+
+      // Victory animation (winner bobs)
+      victoryTimer += 0.05;
+      const wBox = koTarget === enemy ? player : enemy;
+      if (wBox) {
+        const vy = Math.abs(Math.sin(victoryTimer * 3)) * 5;
+        ctx.save();
+        ctx.translate(wBox.x, wBox.y - vy);
+        ctx.fillStyle = C.gold; ctx.font = '6px "Press Start 2P"'; ctx.textAlign = 'center';
+        ctx.fillText('WINNER', 0, -65);
+        ctx.restore();
+      }
+
+      if (koTimer <= 0) {
+        ctx.fillStyle = C.white; ctx.font = '8px "Press Start 2P"'; ctx.textAlign = 'center';
+        ctx.fillText('PRESS SPACE FOR NEXT ROUND', W / 2, H / 2 + 60);
+      }
+    }
+
+    // ── Main Loop ──
+    let lastTime = 0;
+    function gameLoop(timestamp) {
+      requestAnimationFrame(gameLoop);
+      let dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+      lastTime = timestamp;
+
+      // Slow-mo
+      if (slowMoTimer > 0) { slowMoTimer -= dt; dt *= slowMoScale; slowMoScale = Math.min(1, slowMoScale + 0.01); }
+
+      if (gameState === 'TITLE') {
+        drawTitle(ctx);
+        if (keys['Space']) { startGame(); keys['Space'] = false; }
+        return;
+      }
+
+      if (freezeFrames > 0) { freezeFrames--; return; }
+
+      // Camera flash decay
+      if (cameraFlashTimer > 0) cameraFlashTimer -= dt;
+
+      if (gameState === 'FIGHTING') {
+        roundTimerAccum += dt;
+        if (roundTimerAccum >= 1) { roundTimer--; roundTimerAccum -= 1; }
+        if (roundTimer <= 0) {
+          gameState = 'KO'; koTimer = 2;
+          koTarget = player.hp >= enemy.hp ? enemy : player;
+          slowMoTimer = 0.5; slowMoScale = 0.3;
+        }
+
+        // Combo timer decay
+        if (comboTimer > 0) comboTimer -= dt;
+        else comboCount = 0;
+
+        // Player mouse aim → aimY based on mouse position relative to player head
+        const playerScreenY = player.headY;
+        player.aimY = Math.max(-1, Math.min(1, (mouseY - playerScreenY) / 40));
+
+        // Player input
+        player.blocking = false;
+        if (keys['KeyA'] || keys['ArrowLeft']) player.move(-1);
+        if (keys['KeyD'] || keys['ArrowRight']) player.move(1);
+        if (keys['KeyW'] || keys['ArrowUp']) {
+          player.blocking = true;
+          if (!player._blockStarted) { player.blockStartTime = performance.now(); player._blockStarted = true; }
+        } else { player._blockStarted = false; }
+        if (keys['Space']) { player.jump(); keys['Space'] = false; }
+
+        // Dash punch: double-tap direction + J
+        if (dashPunchReady && keys['KeyJ']) {
+          player.punch('dashpunch');
+          dashPunchReady = false; keys['KeyJ'] = false;
+        } else {
+          if (keys['KeyJ']) { player.punch('jab'); keys['KeyJ'] = false; }
+        }
+        if (keys['KeyK']) { player.punch('cross'); keys['KeyK'] = false; }
+        if (keys['KeyL']) { player.punch('hook'); keys['KeyL'] = false; }
+        if (keys['KeyI']) { player.punch('uppercut'); keys['KeyI'] = false; }
+        if (keys['KeyU']) { player.punch('bodyshot'); keys['KeyU'] = false; }
+        // Reset dash if no J press
+        if (!keys['KeyA'] && !keys['KeyD']) dashPunchReady = false;
+
+        AI.update(dt, enemy, player);
+        player.facing = enemy.x > player.x ? 1 : -1;
+        enemy.facing = player.x > enemy.x ? 1 : -1;
+        player.update(dt); enemy.update(dt);
+        checkHits();
+        updateParticles(dt);
+      }
+
+      if (gameState === 'KO') {
+        koTimer -= dt;
+        updateParticles(dt);
+        if (koTimer <= 0 && keys['Space']) {
+          const winner = koTarget === enemy ? player : enemy;
+          winner.score++; roundNumber++; resetRound();
+          keys['Space'] = false;
+        }
+      }
+
+      // Screen shake
+      if (shakeDur > 0) {
+        shakeDur -= dt * 1000;
+        shakeX = (Math.random() - 0.5) * (shakeDur / 100);
+        shakeY = (Math.random() - 0.5) * (shakeDur / 100);
+      } else { shakeX = 0; shakeY = 0; }
+
+      if (flashAlpha > 0) flashAlpha -= dt * 2;
+
+      // ── Draw ──
+      ctx.save();
+      ctx.translate(Math.round(shakeX), Math.round(shakeY));
+      ctx.fillStyle = C.bg; ctx.fillRect(-10, -10, W + 20, H + 20);
+      drawAudience(ctx);
+      drawRing(ctx);
+      const fighters = [player, enemy].sort((a, b) => a.y - b.y);
+      for (const f of fighters) f.draw(ctx);
+      drawParticles(ctx);
+      drawHUD(ctx);
+
+      // Flash overlay
+      if (flashAlpha > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,' + flashAlpha + ')';
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      // Vignette
+      drawVignette(ctx);
+
+      ctx.restore();
+      if (gameState === 'KO') drawKO(ctx);
+    }
+
+    // ── Start ──
+    resetFighters();
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+
+</html>
