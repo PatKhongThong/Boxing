@@ -59,15 +59,225 @@
     #controls span {
       color: #f85
     }
+
+    /* Party System */
+    #party-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 10;
+    }
+
+    #party-menu {
+      background: rgba(10, 5, 20, 0.94);
+      border: 2px solid #f85;
+      padding: 24px 32px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+      box-shadow: 0 0 40px rgba(255, 100, 50, 0.2);
+    }
+
+    #party-menu h3 {
+      color: #f85;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+
+    #party-password {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 9px;
+      padding: 8px 12px;
+      background: #1a1020;
+      border: 2px solid #555;
+      color: #fff;
+      text-align: center;
+      outline: none;
+      width: 220px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    #party-password:focus {
+      border-color: #f85;
+    }
+
+    .party-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 8px;
+      padding: 10px 20px;
+      border: 2px solid;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 1px;
+      width: 220px;
+    }
+
+    #btn-make-party {
+      background: #2a1a30;
+      color: #44dd44;
+      border-color: #44dd44;
+    }
+
+    #btn-make-party:hover {
+      background: #44dd44;
+      color: #000;
+    }
+
+    #btn-join-party {
+      background: #2a1a30;
+      color: #44aaff;
+      border-color: #44aaff;
+    }
+
+    #btn-join-party:hover {
+      background: #44aaff;
+      color: #000;
+    }
+
+    #btn-vs-cpu {
+      background: #2a1a30;
+      color: #f85;
+      border-color: #f85;
+    }
+
+    #btn-vs-cpu:hover {
+      background: #f85;
+      color: #000;
+    }
+
+    #party-status {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      color: #ff4444;
+      min-height: 14px;
+    }
+
+    #waiting-screen {
+      background: rgba(10, 5, 20, 0.95);
+      border: 2px solid #f85;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .waiting-text {
+      color: #ffdd44;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .waiting-code {
+      color: #666;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      margin-top: 16px;
+    }
+
+    #btn-cancel-party {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      padding: 8px 16px;
+      background: #2a1a30;
+      color: #ff4444;
+      border: 2px solid #ff4444;
+      cursor: pointer;
+      margin-top: 16px;
+    }
+
+    #btn-cancel-party:hover {
+      background: #ff4444;
+      color: #000;
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.3
+      }
+    }
+
+    #disconnect-msg {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(10, 5, 20, 0.95);
+      border: 2px solid #ff4444;
+      padding: 24px 32px;
+      text-align: center;
+      z-index: 20;
+      display: none;
+    }
+
+    .dc-text {
+      color: #ff4444;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+    }
+
+    #btn-dc-ok {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      padding: 8px 16px;
+      background: #2a1a30;
+      color: #f85;
+      border: 2px solid #f85;
+      cursor: pointer;
+      margin-top: 16px;
+    }
+
+    #btn-dc-ok:hover {
+      background: #f85;
+      color: #000;
+    }
   </style>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
 </head>
 
 <body>
   <div>
-    <div style="color:#777; font-size:8px; text-align:center; margin-bottom:8px; letter-spacing:1px; font-family:'Press Start 2P',monospace;">Made by Phat Khongthong from GIS :)</div>
+    <div
+      style="color:#777; font-size:8px; text-align:center; margin-bottom:8px; letter-spacing:1px; font-family:'Press Start 2P',monospace;">
+      Made by Phat Khongthong from GIS :)</div>
     <div id="wrapper">
       <canvas id="game" width="640" height="400"></canvas>
       <div id="scanlines"></div>
+      <div id="party-overlay">
+        <div id="party-menu">
+          <h3>⚔ MULTIPLAYER ⚔</h3>
+          <input type="text" id="party-password" placeholder="ENTER PASSWORD" maxlength="20" autocomplete="off"
+            spellcheck="false">
+          <button class="party-btn" id="btn-make-party">MAKE PARTY</button>
+          <button class="party-btn" id="btn-join-party">JOIN PARTY</button>
+          <button class="party-btn" id="btn-vs-cpu">VS CPU</button>
+          <div id="party-status"></div>
+        </div>
+        <div id="waiting-screen" style="display:none">
+          <div class="waiting-text">WAITING FOR OPPONENT...</div>
+          <div class="waiting-code" id="waiting-code"></div>
+          <button id="btn-cancel-party">CANCEL</button>
+        </div>
+      </div>
+      <div id="disconnect-msg">
+        <div class="dc-text">OPPONENT LEFT</div>
+        <button id="btn-dc-ok">OK</button>
+      </div>
     </div>
     <div id="controls">
       <span>A/D</span> MOVE &nbsp; <span>W</span> BLOCK &nbsp;
@@ -153,6 +363,17 @@
       bodyshot: { name: 'BODY', dmg: 4, staCost: 10, reach: 30, dur: 250, headMult: 1.0, bodyShot: true, leanX: 4, leanY: 3, armStyle: 'straight', staDmg: 18 },
       dashpunch: { name: 'DASH', dmg: 12, staCost: 35, reach: 60, dur: 350, headMult: 1.4, bodyShot: false, leanX: 8, leanY: 0, armStyle: 'straight', dashForce: 5 },
     };
+    const PUNCHES_BY_NAME = {};
+    for (const [k, p] of Object.entries(PUNCHES)) PUNCHES_BY_NAME[p.name] = p;
+
+    // ── Online Mode State ──
+    let isOnlineMode = false;
+    let showPartyMenu = false;
+    let syncCounter = 0;
+    const SYNC_RATE = 4;
+    let remoteGameState = null;
+    let guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
+    let lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
 
     // ── Floating damage text ──
     function spawnFloatingText(x, y, text, color) {
@@ -873,10 +1094,12 @@
       ctx.fillStyle = C.gold; ctx.fillText('KNOCKOUT!', W / 2, 100);
       ctx.fillStyle = C.ropes; ctx.font = '10px "Press Start 2P"';
       ctx.fillText('RETRO BOXING', W / 2, 130);
-      titleBlink += 0.05;
-      if (Math.sin(titleBlink) > 0) {
-        ctx.fillStyle = C.white; ctx.font = '10px "Press Start 2P"';
-        ctx.fillText('PRESS SPACE TO FIGHT', W / 2, 300);
+      // Party overlay handles the menu — show it
+      if (!showPartyMenu) {
+        document.getElementById('party-overlay').style.display = 'flex';
+        document.getElementById('party-menu').style.display = 'flex';
+        document.getElementById('waiting-screen').style.display = 'none';
+        showPartyMenu = true;
       }
       ctx.fillStyle = '#666'; ctx.font = '6px "Press Start 2P"';
       ctx.fillText('WASD+JKLIU MOUSE AIM  SPACE JUMP', W / 2, 340);
@@ -888,7 +1111,7 @@
       ctx.fillStyle = '#000a'; ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = C.hpRed; ctx.font = '32px "Press Start 2P"';
       ctx.fillText('K.O.!', W / 2, H / 2 - 20);
-      const winner = koTarget === enemy ? 'PLAYER' : 'CPU';
+      const winner = koTarget === enemy ? player.name : enemy.name;
       ctx.fillStyle = C.gold; ctx.font = '12px "Press Start 2P"';
       ctx.fillText(winner + ' WINS THE ROUND!', W / 2, H / 2 + 20);
 
@@ -922,7 +1145,12 @@
 
       if (gameState === 'TITLE') {
         drawTitle(ctx);
-        if (keys['Space']) { startGame(); keys['Space'] = false; }
+        // Space to start is now handled by VS CPU button, but keep as shortcut
+        return;
+      }
+
+      if (gameState === 'DISCONNECTED') {
+        drawTitle(ctx);
         return;
       }
 
@@ -972,12 +1200,39 @@
         // Reset dash if no J press
         if (!keys['KeyA'] && !keys['KeyD']) dashPunchReady = false;
 
-        AI.update(dt, enemy, player);
-        player.facing = enemy.x > player.x ? 1 : -1;
-        enemy.facing = player.x > enemy.x ? 1 : -1;
-        player.update(dt); enemy.update(dt);
-        checkHits();
-        updateParticles(dt);
+        // Online guest: send input only, skip local sim
+        if (isOnlineMode && !PM.isHost) {
+          const inp = {
+            left: keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0,
+            right: keys['KeyD'] || keys['ArrowRight'] ? 1 : 0,
+            block: keys['KeyW'] || keys['ArrowUp'] ? 1 : 0,
+            aimY: player.aimY,
+            ac: Object.assign({}, guestActionCounts)
+          };
+          PM.sendInput(inp);
+          if (remoteGameState) applyReceivedGameState(remoteGameState);
+          updateParticles(dt);
+        } else {
+          // Host or CPU mode
+          if (isOnlineMode && PM.isHost) {
+            applyGuestInput(enemy, PM.lastGuestInput);
+          } else {
+            AI.update(dt, enemy, player);
+          }
+          player.facing = enemy.x > player.x ? 1 : -1;
+          enemy.facing = player.x > enemy.x ? 1 : -1;
+          player.update(dt); enemy.update(dt);
+          checkHits();
+          updateParticles(dt);
+          // Host: sync state to guest
+          if (isOnlineMode && PM.isHost) {
+            syncCounter++;
+            if (syncCounter >= SYNC_RATE) {
+              PM.sendGameState(serializeGameState());
+              syncCounter = 0;
+            }
+          }
+        }
       }
 
       if (gameState === 'KO') {
@@ -1023,7 +1278,188 @@
       if (gameState === 'KO') drawKO(ctx);
     }
 
+    // ── Party Manager ──
+    const PM = {
+      db: null, partyRef: null, partyId: null, isHost: false,
+      playerId: 'p_' + Math.random().toString(36).substr(2, 9),
+      lastGuestInput: {}, opponentConnected: false, inited: false,
+      init() {
+        if (typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') return;
+        if (firebaseConfig.apiKey === 'YOUR_API_KEY') return;
+        try { firebase.initializeApp(firebaseConfig); this.db = firebase.database(); this.inited = true; }
+        catch (e) { console.error('Firebase init failed:', e); }
+      },
+      async createParty(pw) {
+        if (!this.inited) { setStatus('FIREBASE NOT CONFIGURED'); return false; }
+        if (!pw.trim()) { setStatus('ENTER A PASSWORD'); return false; }
+        this.partyId = Math.random().toString(36).substr(2, 8);
+        this.isHost = true;
+        this.partyRef = this.db.ref('parties/' + this.partyId);
+        try {
+          await this.partyRef.set({ password: pw.trim().toUpperCase(), hostId: this.playerId, guestId: null, status: 'waiting', ts: firebase.database.ServerValue.TIMESTAMP });
+          this.partyRef.onDisconnect().remove();
+          this.partyRef.child('guestId').on('value', snap => {
+            if (snap.val() && !this.opponentConnected) {
+              this.opponentConnected = true;
+              this.partyRef.update({ status: 'fighting' });
+              startOnlineGame();
+            }
+          });
+          this.partyRef.child('guestInput').on('value', snap => { if (snap.val()) this.lastGuestInput = snap.val(); });
+          return true;
+        } catch (e) { setStatus('ERROR: ' + e.message); return false; }
+      },
+      async joinParty(pw) {
+        if (!this.inited) { setStatus('FIREBASE NOT CONFIGURED'); return false; }
+        if (!pw.trim()) { setStatus('ENTER A PASSWORD'); return false; }
+        try {
+          const snap = await this.db.ref('parties').orderByChild('password').equalTo(pw.trim().toUpperCase()).once('value');
+          const parties = snap.val();
+          if (!parties) { setStatus('NO PARTY FOUND'); return false; }
+          let foundId = null;
+          for (const [id, p] of Object.entries(parties)) { if (p.status === 'waiting' && !p.guestId) { foundId = id; break; } }
+          if (!foundId) { setStatus('PARTY IS FULL'); return false; }
+          this.partyId = foundId; this.isHost = false;
+          this.partyRef = this.db.ref('parties/' + foundId);
+          this.opponentConnected = true;
+          await this.partyRef.update({ guestId: this.playerId, status: 'fighting' });
+          this.partyRef.child('guestId').onDisconnect().set(null);
+          this.partyRef.child('gameState').on('value', snap => { if (snap.val()) remoteGameState = snap.val(); });
+          this.partyRef.on('value', snap => { if (!snap.val()) { this.opponentConnected = false; isOnlineMode = false; gameState = 'DISCONNECTED'; document.getElementById('disconnect-msg').style.display = 'block'; } });
+          startOnlineGame();
+          return true;
+        } catch (e) { setStatus('ERROR: ' + e.message); return false; }
+      },
+      sendInput(inp) { if (this.partyRef && !this.isHost) this.partyRef.child('guestInput').set(inp); },
+      sendGameState(s) { if (this.partyRef && this.isHost) this.partyRef.child('gameState').set(s); },
+      leave() {
+        if (this.partyRef) {
+          if (this.isHost) this.partyRef.remove(); else this.partyRef.update({ guestId: null, status: 'ended' });
+          this.partyRef.off(); this.partyRef = null;
+        }
+        this.partyId = null; this.isHost = false; this.opponentConnected = false;
+        this.lastGuestInput = {}; isOnlineMode = false; remoteGameState = null;
+      }
+    };
+
+    function setStatus(msg) { document.getElementById('party-status').textContent = msg; }
+
+    function startOnlineGame() {
+      isOnlineMode = true; showPartyMenu = false;
+      document.getElementById('party-overlay').style.display = 'none';
+      resetFighters();
+      player.name = 'YOU'; enemy.name = 'OPPONENT';
+      roundNumber = 1; player.score = 0; enemy.score = 0;
+      roundTimer = 99; roundTimerAccum = 0;
+      guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
+      lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
+      gameState = 'FIGHTING';
+    }
+
+    function serializeGameState() {
+      return {
+        p1: sBoxer(player), p2: sBoxer(enemy), rn: roundNumber, rt: roundTimer,
+        gs: gameState, ko: koTarget === player ? 'p1' : koTarget === enemy ? 'p2' : null,
+        cc: comboCount, ct: comboTimer, la: lastAttacker === player ? 'p1' : 'p2',
+        sx: shakeX, sy: shakeY, sd: shakeDur, fa: flashAlpha
+      };
+    }
+    function sBoxer(b) {
+      return {
+        x: b.x | 0, y: b.y | 0, hp: Math.round(b.hp * 10) / 10, st: Math.round(b.stamina * 10) / 10,
+        f: b.facing, a: b.attacking ? 1 : 0, pn: b.currentPunch ? b.currentPunch.name : 0,
+        pe: Math.round(b.punchArmExt * 100) / 100, bl: b.blocking ? 1 : 0, hf: b.hitFlash > 0 ? 1 : 0,
+        hs: Math.round(b.headSnapBack * 10) / 10, sn: b.stunTimer > 0 ? 1 : 0,
+        bp: Math.round(b.bobPhase * 10) / 10, br: Math.round(b.breathPhase * 10) / 10,
+        sp: Math.round(b.staggerPhase * 10) / 10, vy: Math.round(b.vy * 10) / 10,
+        gr: b.isGrounded ? 1 : 0, kb: Math.round(b.knockbackVx * 10) / 10, sc: b.score
+      };
+    }
+    function applyReceivedGameState(gs) {
+      if (!gs || !gs.p1 || !gs.p2) return;
+      // Guest is player2 (right boxer), but we display as host's perspective
+      dBoxer(player, gs.p1); dBoxer(enemy, gs.p2);
+      roundNumber = gs.rn; roundTimer = gs.rt;
+      if (gs.gs === 'KO' && gameState !== 'KO') { gameState = 'KO'; koTarget = gs.ko === 'p1' ? player : gs.ko === 'p2' ? enemy : null; koTimer = 3; }
+      else if (gs.gs === 'FIGHTING') gameState = 'FIGHTING';
+      comboCount = gs.cc || 0; comboTimer = gs.ct || 0; lastAttacker = gs.la === 'p1' ? player : enemy;
+      shakeX = gs.sx || 0; shakeY = gs.sy || 0; shakeDur = gs.sd || 0; flashAlpha = gs.fa || 0;
+    }
+    function dBoxer(b, s) {
+      b.x = s.x; b.y = s.y; b.hp = s.hp; b.stamina = s.st; b.facing = s.f;
+      b.attacking = !!s.a; b.currentPunch = s.pn ? PUNCHES_BY_NAME[s.pn] : null;
+      b.punchArmExt = s.pe; b.blocking = !!s.bl; b.hitFlash = s.hf ? 0.1 : 0;
+      b.headSnapBack = s.hs; b.stunTimer = s.sn ? 0.2 : 0;
+      b.bobPhase = s.bp; b.breathPhase = s.br; b.staggerPhase = s.sp;
+      b.vy = s.vy; b.isGrounded = !!s.gr; b.knockbackVx = s.kb; b.score = s.sc;
+    }
+    function applyGuestInput(boxer, inp) {
+      if (!inp) return;
+      boxer.blocking = false;
+      if (inp.left) boxer.move(-1);
+      if (inp.right) boxer.move(1);
+      if (inp.block) {
+        boxer.blocking = true;
+        if (!boxer._blockStarted) { boxer.blockStartTime = performance.now(); boxer._blockStarted = true; }
+      } else { boxer._blockStarted = false; }
+      boxer.aimY = inp.aimY || 0;
+      // Process one-shot actions via counters
+      if (inp.ac) {
+        if (inp.ac.jump > lastHostActionCounts.jump) boxer.jump();
+        if (inp.ac.jab > lastHostActionCounts.jab) boxer.punch('jab');
+        if (inp.ac.cross > lastHostActionCounts.cross) boxer.punch('cross');
+        if (inp.ac.hook > lastHostActionCounts.hook) boxer.punch('hook');
+        if (inp.ac.upper > lastHostActionCounts.upper) boxer.punch('uppercut');
+        if (inp.ac.body > lastHostActionCounts.body) boxer.punch('bodyshot');
+        if (inp.ac.dash > lastHostActionCounts.dash) boxer.punch('dashpunch');
+        lastHostActionCounts = Object.assign({}, inp.ac);
+      }
+    }
+
+    // ── Button Wiring ──
+    document.getElementById('btn-vs-cpu').addEventListener('click', () => {
+      document.getElementById('party-overlay').style.display = 'none';
+      showPartyMenu = false; isOnlineMode = false;
+      startGame();
+    });
+    document.getElementById('btn-make-party').addEventListener('click', async () => {
+      const pw = document.getElementById('party-password').value;
+      setStatus('');
+      const ok = await PM.createParty(pw);
+      if (ok) {
+        document.getElementById('party-menu').style.display = 'none';
+        document.getElementById('waiting-screen').style.display = 'block';
+        document.getElementById('waiting-code').textContent = 'PASSWORD: ' + pw.trim().toUpperCase();
+      }
+    });
+    document.getElementById('btn-join-party').addEventListener('click', async () => {
+      const pw = document.getElementById('party-password').value;
+      setStatus('');
+      await PM.joinParty(pw);
+    });
+    document.getElementById('btn-cancel-party').addEventListener('click', () => {
+      PM.leave();
+      document.getElementById('waiting-screen').style.display = 'none';
+      document.getElementById('party-menu').style.display = 'flex';
+      showPartyMenu = true;
+    });
+    document.getElementById('btn-dc-ok').addEventListener('click', () => {
+      document.getElementById('disconnect-msg').style.display = 'none';
+      PM.leave(); showPartyMenu = false; gameState = 'TITLE';
+    });
+    // Prevent game keys while typing password
+    document.getElementById('party-password').addEventListener('keydown', e => e.stopPropagation());
+    document.getElementById('party-password').addEventListener('keyup', e => e.stopPropagation());
+
+    // Guest key tracking for one-shot actions
+    window.addEventListener('keydown', e => {
+      if (!isOnlineMode || PM.isHost) return;
+      const map = { KeyJ: 'jab', KeyK: 'cross', KeyL: 'hook', KeyI: 'upper', KeyU: 'body', Space: 'jump' };
+      if (map[e.code]) { guestActionCounts[map[e.code]]++; }
+    });
+
     // ── Start ──
+    PM.init();
     resetFighters();
     requestAnimationFrame(gameLoop);
   </script>
