@@ -281,10 +281,10 @@
     </div>
     <div id="controls">
       <span>A/D</span> MOVE &nbsp; <span>W</span> BLOCK &nbsp;
-      <span>J</span> JAB &nbsp; <span>K</span> CROSS &nbsp;
-      <span>L</span> HOOK &nbsp; <span>I</span> UPPERCUT &nbsp;
-      <span>U</span> BODY &nbsp; <span>SPACE</span> JUMP<br>
-      <span>2xA/D+J</span> DASH PUNCH &nbsp; <span>MOUSE</span> AIM
+      <span>LMB</span> JAB &nbsp; <span>E</span> CROSS &nbsp;
+      <span>R</span> HOOK &nbsp; <span>F</span> UPPERCUT &nbsp;
+      <span>Q</span> BODY &nbsp; <span>SPACE</span> JUMP<br>
+      <span>2xA/D+LMB</span> DASH PUNCH &nbsp; <span>MOUSE</span> AIM
     </div>
   </div>
 
@@ -351,6 +351,16 @@
       }
     });
     window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // ── Mouse click (LMB = jab / dash punch) ──
+    let mouseDown = false;
+    canvas.addEventListener('mousedown', e => {
+      if (e.button === 0) { mouseDown = true; e.preventDefault(); }
+    });
+    canvas.addEventListener('mouseup', e => {
+      if (e.button === 0) mouseDown = false;
+    });
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
 
     // ── Ring ──
     const RING = { x: 60, y: 180, w: 520, h: 170 };
@@ -1335,7 +1345,7 @@
         showPartyMenu = true;
       }
       ctx.fillStyle = '#666'; ctx.font = '6px "Press Start 2P"';
-      ctx.fillText('WASD+JKLIU MOUSE AIM  SPACE JUMP', W / 2, 340);
+      ctx.fillText('WASD+LMB/ERQF MOUSE AIM  SPACE JUMP', W / 2, 340);
       drawVignette(ctx);
     }
 
@@ -1424,18 +1434,18 @@
         } else { player._blockStarted = false; }
         if (keys['Space']) { player.jump(); keys['Space'] = false; }
 
-        // Dash punch: double-tap direction + J
-        if (dashPunchReady && keys['KeyJ']) {
+        // Dash punch: double-tap direction + LMB
+        if (dashPunchReady && mouseDown) {
           player.punch('dashpunch');
-          dashPunchReady = false; keys['KeyJ'] = false;
+          dashPunchReady = false; mouseDown = false;
         } else {
-          if (keys['KeyJ']) { player.punch('jab'); keys['KeyJ'] = false; }
+          if (mouseDown) { player.punch('jab'); mouseDown = false; }
         }
-        if (keys['KeyK']) { player.punch('cross'); keys['KeyK'] = false; }
-        if (keys['KeyL']) { player.punch('hook'); keys['KeyL'] = false; }
-        if (keys['KeyI']) { player.punch('uppercut'); keys['KeyI'] = false; }
-        if (keys['KeyU']) { player.punch('bodyshot'); keys['KeyU'] = false; }
-        // Reset dash if no J press
+        if (keys['KeyE']) { player.punch('cross'); keys['KeyE'] = false; }
+        if (keys['KeyR']) { player.punch('hook'); keys['KeyR'] = false; }
+        if (keys['KeyF']) { player.punch('uppercut'); keys['KeyF'] = false; }
+        if (keys['KeyQ']) { player.punch('bodyshot'); keys['KeyQ'] = false; }
+        // Reset dash if no direction held
         if (!keys['KeyA'] && !keys['KeyD']) dashPunchReady = false;
 
         // Online guest: send input only, skip local sim
