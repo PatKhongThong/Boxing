@@ -1159,11 +1159,17 @@
 
         victim.takeDamage(dmg, attacker.x, attacker.currentPunch, isHead);
 
+        // Crowd reacts to hits
+        boostCrowdExcitement(dmg * 0.008 + (isHead ? 0.05 : 0));
+
         // Combo counter
         if (attacker === lastAttacker && comboTimer > 0) {
           comboCount++;
         } else { comboCount = 1; }
         lastAttacker = attacker; comboTimer = 1.5;
+        // Crowd goes wild for combos
+        if (comboCount >= 3) boostCrowdExcitement(0.15);
+        if (comboCount >= 5) { boostCrowdExcitement(0.3); triggerCrowdWave(); }
 
         // Screen shake (extra for uppercut)
         let shakeI = dmg * 0.3;
@@ -1186,6 +1192,11 @@
           triggerShake(8, 600);
           spawnHitParticles(px, py, '#ffffff', 20);
           cameraFlashTimer = 0.5;
+          // Crowd goes absolutely wild on KO
+          boostCrowdExcitement(1);
+          triggerCrowdWave();
+          spawnConfetti(40);
+          for (let ti = 0; ti < 5; ti++) spawnThrownItem(60 + Math.random() * 520);
         }
       }
     }
@@ -1271,48 +1282,304 @@
       ctx.fillRect(RING.x - 20, RING.y - 40, RING.w + 40, RING.h + 60);
     }
 
+    // ── Crowd Excitement System ──
+    let crowdExcitement = 0;       // 0 = calm, 1 = max hype
+    let crowdExcitementTarget = 0;
+    let crowdConfetti = [];        // confetti particles
+    let crowdThrownItems = [];     // thrown cups/hats
+    let crowdSigns = [];           // held-up signs
+    let crowdWavePhase = -1;       // -1 = no wave, 0+ = wave progressing
+    let lastCrowdUpdate = 0;
+
+    function boostCrowdExcitement(amount) {
+      crowdExcitementTarget = Math.min(1, crowdExcitementTarget + amount);
+    }
+
+    function triggerCrowdWave() {
+      crowdWavePhase = 0;
+    }
+
+    function spawnConfetti(count) {
+      for (let i = 0; i < count; i++) {
+        crowdConfetti.push({
+          x: Math.random() * W, y: -10 - Math.random() * 50,
+          vx: (Math.random() - 0.5) * 2, vy: 0.5 + Math.random() * 1.5,
+          rot: Math.random() * Math.PI * 2, rotV: (Math.random() - 0.5) * 0.2,
+          color: ['#ff4444', '#44ff44', '#4444ff', '#ffdd44', '#ff44ff', '#44ffff', '#ffffff', '#ff8844'][Math.floor(Math.random() * 8)],
+          size: 2 + Math.random() * 4, life: 3 + Math.random() * 3
+        });
+      }
+    }
+
+    function spawnThrownItem(fromX) {
+      const types = ['🍺', '🎩', '🍿', '📱', '👟', '🧢'];
+      crowdThrownItems.push({
+        x: fromX, y: 155,
+        vx: (Math.random() - 0.5) * 4 + (RING_CENTER_X - fromX) * 0.01,
+        vy: -3 - Math.random() * 3,
+        text: types[Math.floor(Math.random() * types.length)],
+        life: 2.5, rot: 0, rotV: (Math.random() - 0.5) * 0.3
+      });
+    }
+
     function drawAudience(ctx) {
-      // Two rows for parallax
       const now = performance.now();
-      // Back row (darker, less movement)
+      const dt_crowd = Math.min(0.05, (now - lastCrowdUpdate) / 1000);
+      lastCrowdUpdate = now;
+
+      // Update excitement (smooth lerp toward target, slow decay)
+      crowdExcitement += (crowdExcitementTarget - crowdExcitement) * 0.05;
+      crowdExcitementTarget = Math.max(0, crowdExcitementTarget - 0.003);
+
+      // Fight-state reactive excitement
+      if (player && enemy) {
+        const lowestHp = Math.min(player.hp / player.maxHp, enemy.hp / enemy.maxHp);
+        if (lowestHp < 0.2) crowdExcitementTarget = Math.max(crowdExcitementTarget, 0.6);
+        if (gameState === 'KO') crowdExcitementTarget = 1;
+      }
+
+      const exc = crowdExcitement;
+
+      // ── Audience noise visualization bars at top ──
+      if (exc > 0.1) {
+        ctx.globalAlpha = exc * 0.15;
+        const barCount = 30;
+        for (let i = 0; i < barCount; i++) {
+          const bx = (W / barCount) * i;
+          const bh = Math.abs(Math.sin(now * 0.004 + i * 0.7)) * exc * 20 + 2;
+          ctx.fillStyle = exc > 0.7 ? '#ff4444' : exc > 0.4 ? '#ffaa44' : '#44aaff';
+          ctx.fillRect(bx, 0, W / barCount - 1, bh);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // ── Back row (3rd row — farthest, darkest) ──
+      ctx.fillStyle = '#050310';
+      ctx.fillRect(0, 68, W, 25);
+      const farBackHeads = [30, 65, 100, 135, 170, 205, 240, 280, 320, 355, 390, 425, 460, 500, 540, 575, 610];
+      for (let i = 0; i < farBackHeads.length; i++) {
+        const hx = farBackHeads[i];
+        const waveBob = crowdWavePhase >= 0 ? Math.max(0, Math.sin((crowdWavePhase - hx / W * 4) * Math.PI)) * 6 : 0;
+        const excBob = Math.sin(now * 0.003 + i * 1.3) * exc * 3;
+        const hy = 82 + Math.sin(hx * 0.4 + now * 0.0008) * 1 - waveBob - excBob;
+        ctx.fillStyle = '#0a0616';
+        ctx.beginPath(); ctx.arc(hx, hy, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillRect(hx - 5, hy + 4, 10, 8);
+      }
+
+      // ── Middle row (2nd row) ──
       ctx.fillStyle = '#080412';
-      ctx.fillRect(0, 80, W, 50);
+      ctx.fillRect(0, 88, W, 38);
       const backHeads = [40, 85, 130, 175, 220, 270, 320, 365, 410, 455, 500, 545, 590, 630];
-      for (const hx of backHeads) {
-        const hy = 115 + Math.sin(hx * 0.3 + now * 0.001) * 2;
-        ctx.fillStyle = '#120a1e';
+      const backColors = ['#0e0820', '#100a22', '#0c0719', '#110b24', '#0d0818'];
+      for (let i = 0; i < backHeads.length; i++) {
+        const hx = backHeads[i];
+        const waveBob = crowdWavePhase >= 0 ? Math.max(0, Math.sin((crowdWavePhase - hx / W * 4) * Math.PI)) * 10 : 0;
+        const excJump = exc > 0.7 && Math.sin(now * 0.006 + i * 2) > 0.5 ? 5 : 0;
+        const excBob = Math.sin(now * 0.004 + i * 1.7) * exc * 4;
+        const hy = 115 + Math.sin(hx * 0.3 + now * 0.001) * 2 - waveBob - excJump - excBob;
+        ctx.fillStyle = backColors[i % backColors.length];
         ctx.beginPath(); ctx.arc(hx, hy, 8, 0, Math.PI * 2); ctx.fill();
         ctx.fillRect(hx - 6, hy + 5, 12, 10);
+
+        // Arms raised when excited
+        if (exc > 0.3 && (i + Math.floor(now / 600)) % 3 === 0) {
+          ctx.strokeStyle = backColors[i % backColors.length]; ctx.lineWidth = 2;
+          const armOff = Math.sin(now * 0.007 + i) * 6;
+          ctx.beginPath(); ctx.moveTo(hx - 5, hy + 3); ctx.lineTo(hx - 10, hy - 8 + armOff); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(hx + 5, hy + 3); ctx.lineTo(hx + 10, hy - 8 - armOff); ctx.stroke();
+        }
+
+        // Phone flashlights (some spectators hold up phones)
+        if (exc > 0.5 && i % 4 === Math.floor(now / 2000) % 4) {
+          ctx.fillStyle = `rgba(200,220,255,${0.3 + Math.sin(now * 0.01 + i) * 0.2})`;
+          ctx.fillRect(hx - 1, hy - 12, 3, 5);
+          // Screen glow
+          ctx.fillStyle = `rgba(180,200,255,${0.1 * exc})`;
+          ctx.beginPath(); ctx.arc(hx, hy - 12, 8, 0, Math.PI * 2); ctx.fill();
+        }
       }
-      // Front row (more detail)
+
+      // ── Front row (closest, most detail) ──
       ctx.fillStyle = '#0d0818';
       ctx.fillRect(0, 120, W, 55);
       const frontHeads = [60, 100, 145, 190, 230, 280, 330, 370, 420, 460, 510, 550, 590];
       const crowdColors = ['#1a0f28', '#1e1230', '#16102a', '#201438', '#1a1028'];
+      const shirtColors = ['#2a1535', '#221040', '#2d1838', '#1e1530', '#261242'];
       for (let i = 0; i < frontHeads.length; i++) {
         const hx = frontHeads[i];
-        const hy = 148 + Math.sin(hx * 0.5 + now * 0.002) * 3;
+        const waveBob = crowdWavePhase >= 0 ? Math.max(0, Math.sin((crowdWavePhase - hx / W * 4) * Math.PI)) * 14 : 0;
+        const excJump = exc > 0.5 && Math.sin(now * 0.008 + i * 1.5) > 0.3 ? exc * 8 : 0;
+        const excBob = Math.sin(now * 0.005 + i * 2.1) * exc * 5;
+        const hy = 148 + Math.sin(hx * 0.5 + now * 0.002) * 3 - waveBob - excJump - excBob;
+
+        // Body/shirt
+        ctx.fillStyle = shirtColors[i % shirtColors.length];
+        ctx.fillRect(hx - 8, hy + 6, 16, 18);
+
+        // Head
         ctx.fillStyle = crowdColors[i % crowdColors.length];
         ctx.beginPath(); ctx.arc(hx, hy, 10, 0, Math.PI * 2); ctx.fill();
-        ctx.fillRect(hx - 8, hy + 6, 16, 15);
-        // Waving arms (random audience members)
-        if (i % 3 === Math.floor(now / 800) % 3) {
-          ctx.strokeStyle = crowdColors[i % crowdColors.length];
-          ctx.lineWidth = 2;
-          const armAngle = Math.sin(now * 0.005 + i) * 0.5;
+
+        // Facial feature dot (mouth opening when excited)
+        if (exc > 0.4) {
+          ctx.fillStyle = '#0a0510';
+          ctx.beginPath(); ctx.arc(hx, hy + 3, 1.5 + exc * 2, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Waving arms — more arms wave when more excited
+        const armWaveChance = exc > 0.6 ? 0.7 : exc > 0.3 ? 0.4 : (i % 3 === Math.floor(now / 800) % 3 ? 1 : 0);
+        if (Math.sin(now * 0.001 + i * 3) > (1 - armWaveChance)) {
+          ctx.strokeStyle = crowdColors[i % crowdColors.length]; ctx.lineWidth = 2.5;
+          const la = Math.sin(now * 0.008 + i) * (0.3 + exc * 0.5);
+          const ra = Math.sin(now * 0.009 + i + 2) * (0.3 + exc * 0.5);
+          // Left arm
           ctx.beginPath();
-          ctx.moveTo(hx + (i % 2 ? 6 : -6), hy + 4);
-          ctx.lineTo(hx + (i % 2 ? 14 : -14), hy - 6 + Math.sin(now * 0.008 + i) * 8);
+          ctx.moveTo(hx - 8, hy + 6);
+          ctx.lineTo(hx - 16, hy - 8 + la * 20);
+          ctx.stroke();
+          // Right arm
+          ctx.beginPath();
+          ctx.moveTo(hx + 8, hy + 6);
+          ctx.lineTo(hx + 16, hy - 8 + ra * 20);
           ctx.stroke();
         }
+
+        // Held-up signs (some spectators at high excitement)
+        if (exc > 0.65 && i % 5 === 2) {
+          ctx.save();
+          const signBob = Math.sin(now * 0.004 + i) * 3;
+          const signY = hy - 22 + signBob;
+          // Sign background
+          ctx.fillStyle = ['#ffffff', '#ffdd44', '#ff4444', '#44ff44'][i % 4];
+          ctx.fillRect(hx - 14, signY - 8, 28, 12);
+          // Sign text
+          ctx.fillStyle = '#000'; ctx.font = '4px "Press Start 2P"'; ctx.textAlign = 'center';
+          const signTexts = ['KO!', 'GO!!', 'WOW', 'FIGHT', 'HIT!', 'YES!', 'BOOM', 'NICE'];
+          ctx.fillText(signTexts[(i + Math.floor(now / 3000)) % signTexts.length], hx, signY);
+          // Sign stick
+          ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(hx, signY + 4); ctx.lineTo(hx, hy - 2); ctx.stroke();
+          ctx.restore();
+        }
+
+        // Phone flashlights (front row)
+        if (exc > 0.4 && (i + 2) % 5 === Math.floor(now / 1500) % 5) {
+          const phoneY = hy - 14;
+          ctx.fillStyle = '#445'; ctx.fillRect(hx + 6, phoneY, 4, 7); // phone body
+          ctx.fillStyle = `rgba(180,200,255,${0.5 + Math.sin(now * 0.008 + i * 2) * 0.3})`;
+          ctx.fillRect(hx + 6, phoneY, 4, 7); // screen glow
+          // Light beam
+          ctx.fillStyle = `rgba(200,220,255,${0.05 * exc})`;
+          ctx.beginPath();
+          ctx.moveTo(hx + 8, phoneY);
+          ctx.lineTo(hx + 2, phoneY - 20);
+          ctx.lineTo(hx + 14, phoneY - 20);
+          ctx.closePath(); ctx.fill();
+        }
       }
-      // Camera flashes
-      if (cameraFlashTimer > 0 || Math.random() < 0.003) {
-        const fx = frontHeads[Math.floor(Math.random() * frontHeads.length)];
-        ctx.fillStyle = 'rgba(255,255,255,0.6)';
-        ctx.beginPath(); ctx.arc(fx, 140, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,200,0.15)';
-        ctx.beginPath(); ctx.arc(fx, 140, 12, 0, Math.PI * 2); ctx.fill();
+
+      // ── Camera flashes (more frequent when more exciting) ──
+      const flashChance = 0.003 + exc * 0.04;
+      const flashCount = cameraFlashTimer > 0 ? 3 : (Math.random() < flashChance ? 1 : 0);
+      for (let fi = 0; fi < flashCount; fi++) {
+        const allHeads = [...frontHeads, ...backHeads];
+        const fx = allHeads[Math.floor(Math.random() * allHeads.length)];
+        const fy = 110 + Math.random() * 50;
+        // Bright flash
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.beginPath(); ctx.arc(fx, fy, 3, 0, Math.PI * 2); ctx.fill();
+        // Glow
+        ctx.fillStyle = 'rgba(255,255,200,0.2)';
+        ctx.beginPath(); ctx.arc(fx, fy, 15, 0, Math.PI * 2); ctx.fill();
+        // Lens flare streak
+        ctx.strokeStyle = 'rgba(255,255,200,0.15)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(fx - 20, fy); ctx.lineTo(fx + 20, fy); ctx.stroke();
+      }
+
+      // ── Crowd wave animation ──
+      if (crowdWavePhase >= 0) {
+        crowdWavePhase += dt_crowd * 2;
+        if (crowdWavePhase > 6) crowdWavePhase = -1; // wave complete
+      }
+      // Trigger wave at high excitement randomly
+      if (exc > 0.6 && crowdWavePhase < 0 && Math.random() < 0.001) {
+        triggerCrowdWave();
+      }
+
+      // ── Thrown items ──
+      // Spawn thrown items on big moments
+      if (exc > 0.8 && Math.random() < 0.005) {
+        spawnThrownItem(frontHeads[Math.floor(Math.random() * frontHeads.length)]);
+      }
+      // Update and draw thrown items
+      for (let i = crowdThrownItems.length - 1; i >= 0; i--) {
+        const item = crowdThrownItems[i];
+        item.x += item.vx; item.y += item.vy; item.vy += 0.15;
+        item.rot += item.rotV; item.life -= dt_crowd;
+        if (item.life <= 0 || item.y > H) { crowdThrownItems.splice(i, 1); continue; }
+        ctx.save();
+        ctx.translate(item.x, item.y);
+        ctx.rotate(item.rot);
+        ctx.globalAlpha = Math.min(1, item.life);
+        ctx.font = '8px serif'; ctx.textAlign = 'center';
+        ctx.fillText(item.text, 0, 0);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      // ── Confetti ──
+      if (gameState === 'KO' && crowdConfetti.length < 50) {
+        spawnConfetti(3);
+      }
+      for (let i = crowdConfetti.length - 1; i >= 0; i--) {
+        const c = crowdConfetti[i];
+        c.x += c.vx + Math.sin(now * 0.003 + i) * 0.5;
+        c.y += c.vy;
+        c.rot += c.rotV;
+        c.life -= dt_crowd;
+        if (c.life <= 0 || c.y > H) { crowdConfetti.splice(i, 1); continue; }
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.rot);
+        ctx.globalAlpha = Math.min(1, c.life * 0.5);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.size / 2, -c.size / 4, c.size, c.size / 2);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+      // Clear confetti when game resets
+      if (gameState === 'FIGHTING' && crowdConfetti.length > 0 && crowdConfetti.length < 5) {
+        crowdConfetti = [];
+      }
+
+      // ── Spotlight sweeps at high excitement ──
+      if (exc > 0.5) {
+        ctx.globalAlpha = exc * 0.04;
+        const spotX1 = W * 0.3 + Math.sin(now * 0.001) * W * 0.2;
+        const spotX2 = W * 0.7 + Math.cos(now * 0.0013) * W * 0.2;
+        const spotGrd1 = ctx.createRadialGradient(spotX1, 60, 5, spotX1, 60, 120);
+        spotGrd1.addColorStop(0, 'rgba(255,200,100,1)');
+        spotGrd1.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = spotGrd1;
+        ctx.fillRect(spotX1 - 120, 0, 240, 175);
+        const spotGrd2 = ctx.createRadialGradient(spotX2, 60, 5, spotX2, 60, 120);
+        spotGrd2.addColorStop(0, 'rgba(100,100,255,1)');
+        spotGrd2.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = spotGrd2;
+        ctx.fillRect(spotX2 - 120, 0, 240, 175);
+        ctx.globalAlpha = 1;
+      }
+
+      // ── Crowd stomp/clap rhythm lines ──
+      if (exc > 0.4) {
+        const rhythm = Math.sin(now * 0.01) > 0.7;
+        if (rhythm) {
+          ctx.globalAlpha = exc * 0.08;
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 170, W, 2);
+          ctx.globalAlpha = 1;
+        }
       }
     }
 
