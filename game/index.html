@@ -1680,13 +1680,17 @@
 
     function drawHUD(ctx) {
       const barW = 180, barH = 14, margin = 20;
-      drawBar(ctx, margin, 20, barW, barH, player.hp, player.maxHp, hpColor(player.hp, player.maxHp), 'left');
-      drawBar(ctx, margin, 38, barW * 0.6, 8, player.stamina, player.maxStamina, C.stamina, 'left');
-      drawName(ctx, margin, 56, player.name, C.p1, 'left');
+      const leftBoxer = (isOnlineMode && !PM.isHost) ? enemy : player;
+      const rightBoxer = (isOnlineMode && !PM.isHost) ? player : enemy;
+
+      drawBar(ctx, margin, 20, barW, barH, leftBoxer.hp, leftBoxer.maxHp, hpColor(leftBoxer.hp, leftBoxer.maxHp), 'left');
+      drawBar(ctx, margin, 38, barW * 0.6, 8, leftBoxer.stamina, leftBoxer.maxStamina, C.stamina, 'left');
+      drawName(ctx, margin, 56, leftBoxer.name, (leftBoxer === player ? C.p1 : C.p2), 'left');
+
       const p2x = W - margin;
-      drawBar(ctx, p2x, 20, barW, barH, enemy.hp, enemy.maxHp, hpColor(enemy.hp, enemy.maxHp), 'right');
-      drawBar(ctx, p2x, 38, barW * 0.6, 8, enemy.stamina, enemy.maxStamina, C.stamina, 'right');
-      drawName(ctx, p2x, 56, enemy.name, C.p2, 'right');
+      drawBar(ctx, p2x, 20, barW, barH, rightBoxer.hp, rightBoxer.maxHp, hpColor(rightBoxer.hp, rightBoxer.maxHp), 'right');
+      drawBar(ctx, p2x, 38, barW * 0.6, 8, rightBoxer.stamina, rightBoxer.maxStamina, C.stamina, 'right');
+      drawName(ctx, p2x, 56, rightBoxer.name, (rightBoxer === player ? C.p1 : C.p2), 'right');
 
       ctx.fillStyle = C.gold; ctx.font = '10px "Press Start 2P"'; ctx.textAlign = 'center';
       ctx.fillText('ROUND ' + roundNumber, W / 2, 20);
@@ -2063,7 +2067,7 @@
         // Reset dash if no direction held
         if (!keys['KeyA'] && !keys['KeyD']) dashPunchReady = false;
 
-        // Online guest: send input only, skip local sim
+        // Online guest: send input
         if (isOnlineMode && !PM.isHost) {
           const inp = {
             left: keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0,
@@ -2074,27 +2078,38 @@
             ac: Object.assign({}, guestActionCounts)
           };
           PM.sendInput(inp);
-          if (remoteGameState) applyReceivedGameState(remoteGameState);
-          updateParticles(dt);
-        } else {
-          // Host or CPU mode
-          if (isOnlineMode && PM.isHost) {
-            applyGuestInput(enemy, PM.lastGuestInput);
-          } else {
-            AI.update(dt, enemy, player);
-          }
-          player.facing = enemy.x > player.x ? 1 : -1;
-          enemy.facing = player.x > enemy.x ? 1 : -1;
-          player.update(dt); enemy.update(dt);
-          checkHits();
-          updateParticles(dt);
-          // Host: sync state to guest
-          if (isOnlineMode && PM.isHost) {
-            syncCounter++;
-            if (syncCounter >= SYNC_RATE) {
-              PM.sendGameState(serializeGameState());
-              syncCounter = 0;
-            }
+        }
+
+        // Apply received state from Host (Guest perspective mapping handled inside)
+        if (isOnlineMode && !PM.isHost && remoteGameState) {
+          applyReceivedGameState(remoteGameState);
+        }
+
+        // Host: Apply Guest inputs
+        if (isOnlineMode && PM.isHost) {
+          applyGuestInput(enemy, PM.lastGuestInput);
+        }
+
+        // AI logic (Offline or Host vs AI)
+        if (!isOnlineMode) {
+          AI.update(dt, enemy, player);
+        }
+
+        // Common Simulation (Movement, Facing, Hitbox update)
+        player.facing = enemy.x > player.x ? 1 : -1;
+        enemy.facing = player.x > enemy.x ? 1 : -1;
+        player.update(dt); enemy.update(dt);
+
+        // Host is source of truth for hits, but Guest also runs checks for immediate local effects
+        checkHits();
+        updateParticles(dt);
+
+        // Host: sync state to guest
+        if (isOnlineMode && PM.isHost) {
+          syncCounter++;
+          if (syncCounter >= SYNC_RATE) {
+            PM.sendGameState(serializeGameState());
+            syncCounter = 0;
           }
         }
       }
@@ -2303,12 +2318,21 @@
     }
     function applyReceivedGameState(gs) {
       if (!gs || !gs.p1 || !gs.p2) return;
-      // Guest is player2 (right boxer), but we display as host's perspective
-      dBoxer(player, gs.p1); dBoxer(enemy, gs.p2);
+      if (PM.isHost) {
+        // Host should theoretically not call this as they are the source, but for safety:
+        dBoxer(player, gs.p1); dBoxer(enemy, gs.p2);
+        koTarget = gs.ko === 'p1' ? player : gs.ko === 'p2' ? enemy : null;
+      } else {
+        // Guest: Swap P1 (Host) and P2 (Guest) to match local perspective
+        dBoxer(player, gs.p2);
+        dBoxer(enemy, gs.p1);
+        koTarget = gs.ko === 'p2' ? player : gs.ko === 'p1' ? enemy : null;
+      }
       roundNumber = gs.rn; roundTimer = gs.rt;
-      if (gs.gs === 'KO' && gameState !== 'KO') { gameState = 'KO'; koTarget = gs.ko === 'p1' ? player : gs.ko === 'p2' ? enemy : null; koTimer = 3; }
+      if (gs.gs === 'KO' && gameState !== 'KO') { gameState = 'KO'; koTimer = 3; }
       else if (gs.gs === 'FIGHTING') gameState = 'FIGHTING';
-      comboCount = gs.cc || 0; comboTimer = gs.ct || 0; lastAttacker = gs.la === 'p1' ? player : enemy;
+      comboCount = gs.cc || 0; comboTimer = gs.ct || 0;
+      lastAttacker = (gs.la === 'p1' && PM.isHost) || (gs.la === 'p2' && !PM.isHost) ? player : enemy;
       shakeX = gs.sx || 0; shakeY = gs.sy || 0; shakeDur = gs.sd || 0; flashAlpha = gs.fa || 0;
     }
     function dBoxer(b, s) {
