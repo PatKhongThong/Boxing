@@ -1039,11 +1039,11 @@
       // CPU always picks a random different character
       let cpuIdx = Math.floor(Math.random() * CHARACTERS.length);
       while (cpuIdx === selectedCharIdx && CHARACTERS.length > 1) cpuIdx = Math.floor(Math.random() * CHARACTERS.length);
-      const cpuCh = CHARACTERS[cpuIdx];
+      const cpuCh = isOnlineMode ? CHARACTERS[PM.enemyCharIdx] : CHARACTERS[cpuIdx];
       enemy = new Boxer(RING.x + RING.w - 120, -1, {
         main: cpuCh.colors.main, dark: cpuCh.colors.dark, skin: cpuCh.colors.skin, glove: cpuCh.colors.glove,
         skinShd: cpuCh.colors.skinShd, hair: cpuCh.colors.hair, shoe: cpuCh.colors.shoe, trim: cpuCh.colors.trim
-      }, cpuCh.name, false);
+      }, isOnlineMode ? 'OPPONENT' : cpuCh.name, false);
       enemy.hp = cpuCh.hp; enemy.maxHp = cpuCh.hp;
       enemy.stamina = cpuCh.stamina; enemy.maxStamina = cpuCh.stamina;
       enemy.speed = cpuCh.speed; enemy.retreatMod = cpuCh.retreatMod;
@@ -1068,6 +1068,11 @@
       roundNumber = 1;
       if (player) player.score = 0;
       if (enemy) enemy.score = 0;
+      if (isOnlineMode) {
+        guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
+        lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
+        remoteGameState = null;
+      }
       resetRound();
     }
 
@@ -1768,6 +1773,7 @@
         const cy = 55;
         const isSelected = i === selectedCharIdx;
         const isHover = charHoverIdx === i;
+        const isEnemyChoice = isOnlineMode && PM.enemyCharIdx === i;
 
         // Card background
         ctx.fillStyle = isSelected ? 'rgba(255,220,68,0.15)' : 'rgba(20,10,35,0.85)';
@@ -1776,14 +1782,23 @@
         // Card border (animated glow for selected)
         if (isSelected) {
           ctx.strokeStyle = C.gold; ctx.lineWidth = 3;
-          ctx.shadowColor = C.gold; ctx.shadowBlur = 10 + Math.sin(now * 0.005) * 5;
+          ctx.shadowColor = C.gold; ctx.shadowBlur = headY < 0 ? 0 : 10 + Math.sin(now * 0.005) * 5;
+        } else if (isEnemyChoice) {
+          ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
         } else if (isHover) {
           ctx.strokeStyle = '#888'; ctx.lineWidth = 2; ctx.shadowBlur = 0;
         } else {
           ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.shadowBlur = 0;
         }
         ctx.strokeRect(cx, cy, cardW, cardH);
+        ctx.setLineDash([]);
         ctx.shadowBlur = 0;
+
+        // P2 indicator
+        if (isEnemyChoice) {
+          ctx.fillStyle = '#ff4444'; ctx.font = '8px "Press Start 2P"';
+          ctx.fillText(PM.enemyReady ? 'P2 READY' : 'P2 PICKING', cx + cardW / 2, cy + cardH - 10);
+        }
 
         // Character name
         ctx.fillStyle = isSelected ? C.gold : ch.colors.main;
@@ -1918,12 +1933,21 @@
       // Start button
       const btnW = 160, btnH = 24;
       const btnX = W / 2 - btnW / 2, btnY = H - 55;
-      ctx.fillStyle = CHARACTERS[selectedCharIdx].colors.main;
+      const readyToStart = !isOnlineMode || (PM.playerReady && PM.enemyReady);
+
+      ctx.fillStyle = isOnlineMode && PM.playerReady ? '#44ff44' : CHARACTERS[selectedCharIdx].colors.main;
       ctx.fillRect(btnX, btnY, btnW, btnH);
       ctx.strokeStyle = C.gold; ctx.lineWidth = 2;
       ctx.strokeRect(btnX, btnY, btnW, btnH);
       ctx.fillStyle = '#000'; ctx.font = '8px "Press Start 2P"'; ctx.textAlign = 'center';
-      ctx.fillText('START FIGHT', W / 2, btnY + 16);
+
+      let btnText = 'START FIGHT';
+      if (isOnlineMode) {
+        if (PM.playerReady && PM.enemyReady) btnText = 'GET READY!';
+        else if (PM.playerReady) btnText = 'WAITING...';
+        else btnText = 'READY UP';
+      }
+      ctx.fillText(btnText, W / 2, btnY + 16);
 
       // Store button region for click detection
       charSelectBtnRegion = { x: btnX, y: btnY, w: btnW, h: btnH };
@@ -2123,6 +2147,7 @@
       peer: null, conn: null, isHost: false,
       lastGuestInput: {}, connected: false,
       syncInterval: null,
+      enemyCharIdx: 0, enemyReady: false, playerReady: false,
 
       init() { /* PeerJS needs no init */ },
 
@@ -2143,9 +2168,12 @@
               this.connected = true;
               conn.on('open', () => {
                 startOnlineGame();
+                this.conn.send({ type: 'char_update', idx: selectedCharIdx });
               });
               conn.on('data', (data) => {
                 if (data.type === 'input') this.lastGuestInput = data.data;
+                if (data.type === 'char_update') { this.enemyCharIdx = data.idx; }
+                if (data.type === 'ready') { this.enemyReady = data.ready; }
               });
               conn.on('close', () => {
                 this.connected = false;
@@ -2191,11 +2219,14 @@
             this.conn.on('open', () => {
               this.connected = true;
               startOnlineGame();
+              this.conn.send({ type: 'char_update', idx: selectedCharIdx });
               resolve(true);
             });
 
             this.conn.on('data', (data) => {
               if (data.type === 'state') remoteGameState = data.data;
+              if (data.type === 'char_update') { this.enemyCharIdx = data.idx; }
+              if (data.type === 'ready') { this.enemyReady = data.ready; }
             });
 
             this.conn.on('close', () => {
@@ -2245,13 +2276,10 @@
     function startOnlineGame() {
       isOnlineMode = true; showPartyMenu = false;
       document.getElementById('party-overlay').style.display = 'none';
-      resetFighters();
-      player.name = 'YOU'; enemy.name = 'OPPONENT';
-      roundNumber = 1; player.score = 0; enemy.score = 0;
-      roundTimer = 99; roundTimerAccum = 0;
-      guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
-      lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
-      gameState = 'FIGHTING';
+      // Reset ready states and character sync
+      PM.enemyReady = false; PM.playerReady = false; PM.enemyCharIdx = 0;
+      // Go to character select first — startGame() handles the rest
+      gameState = 'CHARSELECT';
     }
 
     function serializeGameState() {
@@ -2337,6 +2365,13 @@
         const cx = startX + i * (cardW + gap), cy = 55;
         if (mx >= cx && mx <= cx + cardW && my >= cy && my <= cy + cardH) {
           selectedCharIdx = i;
+          if (isOnlineMode) {
+            PM.playerReady = false;
+            if (PM.conn && PM.conn.open) {
+              PM.conn.send({ type: 'char_update', idx: i });
+              PM.conn.send({ type: 'ready', ready: false });
+            }
+          }
         }
       }
 
@@ -2344,7 +2379,15 @@
       if (charSelectBtnRegion) {
         const b = charSelectBtnRegion;
         if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
-          startGame();
+          if (isOnlineMode) {
+            PM.playerReady = !PM.playerReady;
+            if (PM.conn && PM.conn.open) {
+              PM.conn.send({ type: 'ready', ready: PM.playerReady });
+            }
+            if (PM.playerReady && PM.enemyReady) startGame();
+          } else {
+            startGame();
+          }
         }
       }
     });
@@ -2371,7 +2414,16 @@
     // Space to start from charselect
     window.addEventListener('keydown', (e) => {
       if (gameState === 'CHARSELECT' && e.code === 'Space') {
-        startGame(); e.preventDefault();
+        if (isOnlineMode) {
+          PM.playerReady = !PM.playerReady;
+          if (PM.conn && PM.conn.open) {
+            PM.conn.send({ type: 'ready', ready: PM.playerReady });
+          }
+          if (PM.playerReady && PM.enemyReady) startGame();
+        } else {
+          startGame();
+        }
+        e.preventDefault();
       }
     });
     document.getElementById('btn-make-party').addEventListener('click', async () => {
