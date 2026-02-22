@@ -280,10 +280,10 @@
       </div>
     </div>
     <div id="controls">
-      <span>A/D</span> MOVE &nbsp; <span>S/RMB</span> BLOCK &nbsp;
+      <span>A/D</span> MOVE &nbsp; <span>W</span> UP &nbsp; <span>S/RMB</span> BLOCK &nbsp;
       <span>LMB</span> JAB &nbsp; <span>E</span> CROSS &nbsp;
       <span>R</span> HOOK &nbsp; <span>F</span> UPPERCUT &nbsp;
-      <span>Q</span> BODY &nbsp; <span>W/SPACE</span> JUMP<br>
+      <span>Q</span> BODY &nbsp; <span>SPACE</span> JUMP<br>
       <span>2xA/D+LMB</span> DASH PUNCH &nbsp; <span>MOUSE</span> AIM
     </div>
   </div>
@@ -412,6 +412,12 @@
 
         this.vx = 0; this.speed = 3; this.retreatMod = 0.7;
 
+        // Ring depth (vertical position within ring)
+        this.ringZ = 0; // 0 = bottom of ring, negative = toward top
+        this.vzRing = 0; // vertical ring velocity
+        this.ringZSpeed = 2.5;
+        this.baseGroundY = RING.y + RING.h - 10;
+
         // Jump
         this.vy = 0; this.isGrounded = true;
         this.jumpForce = -8; this.gravity = 0.4;
@@ -523,6 +529,19 @@
         if (this.x < leftEdge) { this.x = leftEdge; this.knockbackVx = Math.abs(this.knockbackVx) * 0.3; }
         if (this.x > rightEdge) { this.x = rightEdge; this.knockbackVx = -Math.abs(this.knockbackVx) * 0.3; }
         this.vx = 0;
+
+        // Ring depth movement (vertical)
+        this.ringZ += this.vzRing * dt * 60;
+        // Clamp within ring area (can move up to ~130px up from baseline)
+        const maxUp = -(RING.h - 40);
+        if (this.ringZ < maxUp) this.ringZ = maxUp;
+        if (this.ringZ > 0) this.ringZ = 0;
+        // Auto-drift back toward baseline when not moving
+        if (this.vzRing === 0 && this.ringZ < 0) {
+          this.ringZ = Math.min(0, this.ringZ + 1.5 * dt * 60);
+        }
+        this.groundY = this.baseGroundY + this.ringZ;
+        this.vzRing = 0;
       }
 
       move(dir) {
@@ -535,6 +554,11 @@
       jump() {
         if (!this.isGrounded || this.attacking || this.isStunned) return;
         this.vy = this.jumpForce; this.isGrounded = false;
+      }
+
+      moveZ(dir) {
+        if (this.attacking || this.isStunned) return;
+        this.vzRing = dir * this.ringZSpeed;
       }
 
       punch(type) {
@@ -999,6 +1023,12 @@
         const dir = target.x > cpu.x ? 1 : -1;
         cpu.blocking = false;
 
+        // AI Z-tracking: follow player's ring depth
+        const zDiff = target.groundY - cpu.groundY;
+        if (Math.abs(zDiff) > 10) {
+          cpu.moveZ(zDiff < 0 ? -1 : 1);
+        }
+
         switch (this.state) {
           case 'CHASE': cpu.move(dir); break;
           case 'RETREAT':
@@ -1109,6 +1139,9 @@
     // ── Hit Detection ──
     function checkHits() { doHitCheck(player, enemy); doHitCheck(enemy, player); }
     function doHitCheck(attacker, victim) {
+      // Z-distance check: fighters must be at similar ring depth to connect
+      const zDist = Math.abs(attacker.groundY - victim.groundY);
+      if (zDist > 25) return; // too far apart vertically in ring
       const hb = attacker.getHitbox();
       if (!hb) return;
       const hr = victim.getHurtbox();
@@ -1348,7 +1381,7 @@
         showPartyMenu = true;
       }
       ctx.fillStyle = '#666'; ctx.font = '6px "Press Start 2P"';
-      ctx.fillText('WASD+LMB/ERQF  RMB BLOCK  SPACE JUMP', W / 2, 340);
+      ctx.fillText('WASD MOVE  LMB/ERQF PUNCH  S BLOCK  SPACE JUMP', W / 2, 340);
       drawVignette(ctx);
     }
 
@@ -1431,11 +1464,12 @@
         player.blocking = false;
         if (keys['KeyA'] || keys['ArrowLeft']) player.move(-1);
         if (keys['KeyD'] || keys['ArrowRight']) player.move(1);
+        if (keys['KeyW'] || keys['ArrowUp']) player.moveZ(-1);  // move up in ring
         if (keys['KeyS'] || keys['ArrowDown'] || rmbDown) {
           player.blocking = true;
           if (!player._blockStarted) { player.blockStartTime = performance.now(); player._blockStarted = true; }
         } else { player._blockStarted = false; }
-        if (keys['KeyW'] || keys['ArrowUp'] || keys['Space']) { player.jump(); keys['KeyW'] = false; keys['Space'] = false; }
+        if (keys['Space']) { player.jump(); keys['Space'] = false; }
 
         // Dash punch: double-tap direction + LMB
         if (dashPunchReady && mouseDown) {
