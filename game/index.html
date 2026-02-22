@@ -280,10 +280,10 @@
       </div>
     </div>
     <div id="controls">
-      <span>A/D</span> MOVE &nbsp; <span>W</span> BLOCK &nbsp;
+      <span>A/D</span> MOVE &nbsp; <span>S/RMB</span> BLOCK &nbsp;
       <span>LMB</span> JAB &nbsp; <span>E</span> CROSS &nbsp;
       <span>R</span> HOOK &nbsp; <span>F</span> UPPERCUT &nbsp;
-      <span>Q</span> BODY &nbsp; <span>SPACE</span> JUMP<br>
+      <span>Q</span> BODY &nbsp; <span>W/SPACE</span> JUMP<br>
       <span>2xA/D+LMB</span> DASH PUNCH &nbsp; <span>MOUSE</span> AIM
     </div>
   </div>
@@ -352,13 +352,16 @@
     });
     window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-    // ── Mouse click (LMB = jab / dash punch) ──
+    // ── Mouse click (LMB = jab / dash punch, RMB = block) ──
     let mouseDown = false;
+    let rmbDown = false;
     canvas.addEventListener('mousedown', e => {
       if (e.button === 0) { mouseDown = true; e.preventDefault(); }
+      if (e.button === 2) { rmbDown = true; e.preventDefault(); }
     });
     canvas.addEventListener('mouseup', e => {
       if (e.button === 0) mouseDown = false;
+      if (e.button === 2) rmbDown = false;
     });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
@@ -1345,7 +1348,7 @@
         showPartyMenu = true;
       }
       ctx.fillStyle = '#666'; ctx.font = '6px "Press Start 2P"';
-      ctx.fillText('WASD+LMB/ERQF MOUSE AIM  SPACE JUMP', W / 2, 340);
+      ctx.fillText('WASD+LMB/ERQF  RMB BLOCK  SPACE JUMP', W / 2, 340);
       drawVignette(ctx);
     }
 
@@ -1428,11 +1431,11 @@
         player.blocking = false;
         if (keys['KeyA'] || keys['ArrowLeft']) player.move(-1);
         if (keys['KeyD'] || keys['ArrowRight']) player.move(1);
-        if (keys['KeyW'] || keys['ArrowUp']) {
+        if (keys['KeyS'] || keys['ArrowDown'] || rmbDown) {
           player.blocking = true;
           if (!player._blockStarted) { player.blockStartTime = performance.now(); player._blockStarted = true; }
         } else { player._blockStarted = false; }
-        if (keys['Space']) { player.jump(); keys['Space'] = false; }
+        if (keys['KeyW'] || keys['ArrowUp'] || keys['Space']) { player.jump(); keys['KeyW'] = false; keys['Space'] = false; }
 
         // Dash punch: double-tap direction + LMB
         if (dashPunchReady && mouseDown) {
