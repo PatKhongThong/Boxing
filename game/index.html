@@ -1782,7 +1782,7 @@
         // Card border (animated glow for selected)
         if (isSelected) {
           ctx.strokeStyle = C.gold; ctx.lineWidth = 3;
-          ctx.shadowColor = C.gold; ctx.shadowBlur = headY < 0 ? 0 : 10 + Math.sin(now * 0.005) * 5;
+          ctx.shadowColor = C.gold; ctx.shadowBlur = 10 + Math.sin(now * 0.005) * 5;
         } else if (isEnemyChoice) {
           ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
         } else if (isHover) {
