@@ -154,6 +154,17 @@
       color: #000;
     }
 
+    #btn-lan-play {
+      background: #1a301a;
+      color: #44dd44;
+      border-color: #44dd44;
+    }
+
+    #btn-lan-play:hover {
+      background: #44dd44;
+      color: #000;
+    }
+
     #party-status {
       font-family: 'Press Start 2P', monospace;
       font-size: 7px;
@@ -266,6 +277,7 @@
           <button class="party-btn" id="btn-make-party">MAKE PARTY</button>
           <button class="party-btn" id="btn-join-party">JOIN PARTY</button>
           <button class="party-btn" id="btn-vs-cpu">VS CPU</button>
+          <button class="party-btn" id="btn-lan-play">⚡ LAN PLAY</button>
           <div id="party-status"></div>
         </div>
         <div id="waiting-screen" style="display:none">
@@ -2035,7 +2047,8 @@
           const inp = {
             left: keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0,
             right: keys['KeyD'] || keys['ArrowRight'] ? 1 : 0,
-            block: keys['KeyW'] || keys['ArrowUp'] ? 1 : 0,
+            block: keys['KeyS'] || keys['ArrowDown'] || rmbDown ? 1 : 0,
+            up: keys['KeyW'] || keys['ArrowUp'] ? 1 : 0,
             aimY: player.aimY,
             ac: Object.assign({}, guestActionCounts)
           };
@@ -2338,14 +2351,148 @@
     // Guest key tracking for one-shot actions
     window.addEventListener('keydown', e => {
       if (!isOnlineMode || PM.isHost) return;
-      const map = { KeyJ: 'jab', KeyK: 'cross', KeyL: 'hook', KeyI: 'upper', KeyU: 'body', Space: 'jump' };
+      const map = { KeyE: 'cross', KeyR: 'hook', KeyF: 'upper', KeyQ: 'body', Space: 'jump' };
       if (map[e.code]) { guestActionCounts[map[e.code]]++; }
+    });
+    // LMB jab counter for guest
+    canvas.addEventListener('mousedown', e => {
+      if (!isOnlineMode || PM.isHost) return;
+      if (e.button === 0) guestActionCounts.jab++;
     });
 
     // ── Start ──
     PM.init();
     resetFighters();
     requestAnimationFrame(gameLoop);
+
+    // ── LAN Play Module ──
+    const LAN = {
+      ws: null,
+      isHost: false,
+      connected: false,
+      syncInterval: null,
+
+      connect() {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const url = `${proto}://${location.host}`;
+        setStatus('CONNECTING...');
+        this.ws = new WebSocket(url);
+
+        this.ws.onopen = () => {
+          setStatus('CONNECTED — WAITING FOR OPPONENT...');
+        };
+
+        this.ws.onmessage = (e) => {
+          let msg;
+          try { msg = JSON.parse(e.data); } catch { return; }
+
+          if (msg.type === 'welcome') {
+            this.isHost = msg.id === 0;
+            setStatus(this.isHost ? 'YOU ARE HOST — WAITING FOR PLAYER 2...' : 'CONNECTED AS PLAYER 2 — WAITING...');
+          }
+
+          if (msg.type === 'full') {
+            setStatus('GAME IS FULL — TRY AGAIN LATER');
+            return;
+          }
+
+          if (msg.type === 'start') {
+            this.isHost = msg.id === 0;
+            this.connected = true;
+            isOnlineMode = true;
+            document.getElementById('party-overlay').style.display = 'none';
+            showPartyMenu = false;
+
+            // Both go to char select
+            gameState = 'CHARSELECT';
+
+            // Host syncs game state
+            if (this.isHost) {
+              this.syncInterval = setInterval(() => {
+                if (gameState === 'FIGHTING' || gameState === 'KO') {
+                  this.send({ type: 'state', data: serializeGameState() });
+                }
+              }, 50); // 20fps sync
+            }
+          }
+
+          if (msg.type === 'disconnect') {
+            this.disconnect();
+            gameState = 'DISCONNECTED';
+            document.getElementById('disconnect-msg').style.display = 'block';
+          }
+
+          // Game state from host (for guest)
+          if (msg.type === 'state' && !this.isHost) {
+            remoteGameState = msg.data;
+          }
+
+          // Input from guest (for host)
+          if (msg.type === 'input' && this.isHost) {
+            PM.lastGuestInput = msg.data;
+          }
+
+          // Guest started fight
+          if (msg.type === 'fight_start') {
+            if (this.isHost) {
+              startGame();
+            }
+          }
+        };
+
+        this.ws.onclose = () => {
+          if (this.connected) {
+            this.disconnect();
+            gameState = 'DISCONNECTED';
+            document.getElementById('disconnect-msg').style.display = 'block';
+          }
+        };
+      },
+
+      send(msg) {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify(msg));
+        }
+      },
+
+      disconnect() {
+        this.connected = false;
+        isOnlineMode = false;
+        if (this.syncInterval) { clearInterval(this.syncInterval); this.syncInterval = null; }
+        if (this.ws) { this.ws.close(); this.ws = null; }
+      }
+    };
+
+    // LAN Play button
+    document.getElementById('btn-lan-play').addEventListener('click', () => {
+      LAN.connect();
+    });
+
+    // Override startGame for LAN mode — host notifies guest
+    const _origStartGame = startGame;
+    startGame = function () {
+      _origStartGame();
+      if (LAN.connected) {
+        LAN.send({ type: 'fight_start' });
+      }
+    };
+
+    // In the game loop, LAN guest sends input instead of simulating
+    const _origLoop = null; // We hook into the existing input section via LAN flags
+    // The existing online mode code already handles guest input sending
+    // We just need to make PM.isHost and PM.sendInput work with LAN
+    PM.isHost = false;
+    Object.defineProperty(PM, 'isHost', {
+      get() { return LAN.connected ? LAN.isHost : this._isHost; },
+      set(v) { this._isHost = v; }
+    });
+    PM.sendInput = function (inp) {
+      if (LAN.connected && !LAN.isHost) {
+        LAN.send({ type: 'input', data: inp });
+      } else if (this.partyRef && !this._isHost) {
+        this.partyRef.child('guestInput').set(inp);
+      }
+    };
   </script>
 </body>
 
