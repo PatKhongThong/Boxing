@@ -256,9 +256,7 @@
       color: #000;
     }
   </style>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-  <script src="firebase-config.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 
 <body>
@@ -272,12 +270,11 @@
       <div id="party-overlay">
         <div id="party-menu">
           <h3>⚔ MULTIPLAYER ⚔</h3>
-          <input type="text" id="party-password" placeholder="ENTER PASSWORD" maxlength="20" autocomplete="off"
+          <input type="text" id="party-password" placeholder="ENTER ROOM CODE" maxlength="20" autocomplete="off"
             spellcheck="false">
-          <button class="party-btn" id="btn-make-party">MAKE PARTY</button>
-          <button class="party-btn" id="btn-join-party">JOIN PARTY</button>
+          <button class="party-btn" id="btn-make-party">CREATE ROOM</button>
+          <button class="party-btn" id="btn-join-party">JOIN ROOM</button>
           <button class="party-btn" id="btn-vs-cpu">VS CPU</button>
-          <button class="party-btn" id="btn-lan-play">⚡ LAN PLAY</button>
           <div id="party-status"></div>
         </div>
         <div id="waiting-screen" style="display:none">
@@ -2121,66 +2118,124 @@
       if (gameState === 'KO') drawKO(ctx);
     }
 
-    // ── Party Manager ──
+    // ── Party Manager (PeerJS ─ no server needed!) ──
     const PM = {
-      db: null, partyRef: null, partyId: null, isHost: false,
-      playerId: 'p_' + Math.random().toString(36).substr(2, 9),
-      lastGuestInput: {}, opponentConnected: false, inited: false,
-      init() {
-        if (typeof firebase === 'undefined' || typeof firebaseConfig === 'undefined') return;
-        if (firebaseConfig.apiKey === 'YOUR_API_KEY') return;
-        try { firebase.initializeApp(firebaseConfig); this.db = firebase.database(); this.inited = true; }
-        catch (e) { console.error('Firebase init failed:', e); }
-      },
+      peer: null, conn: null, isHost: false,
+      lastGuestInput: {}, connected: false,
+      syncInterval: null,
+
+      init() { /* PeerJS needs no init */ },
+
       async createParty(pw) {
-        if (!this.inited) { setStatus('FIREBASE NOT CONFIGURED'); return false; }
-        if (!pw.trim()) { setStatus('ENTER A PASSWORD'); return false; }
-        this.partyId = Math.random().toString(36).substr(2, 8);
-        this.isHost = true;
-        this.partyRef = this.db.ref('parties/' + this.partyId);
-        try {
-          await this.partyRef.set({ password: pw.trim().toUpperCase(), hostId: this.playerId, guestId: null, status: 'waiting', ts: firebase.database.ServerValue.TIMESTAMP });
-          this.partyRef.onDisconnect().remove();
-          this.partyRef.child('guestId').on('value', snap => {
-            if (snap.val() && !this.opponentConnected) {
-              this.opponentConnected = true;
-              this.partyRef.update({ status: 'fighting' });
-              startOnlineGame();
-            }
+        if (!pw.trim()) { setStatus('ENTER A ROOM CODE'); return false; }
+        const roomId = 'knockout_' + pw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        setStatus('CREATING ROOM...');
+
+        return new Promise((resolve) => {
+          this.peer = new Peer(roomId);
+          this.isHost = true;
+
+          this.peer.on('open', () => {
+            setStatus('ROOM CREATED! WAITING FOR OPPONENT...');
+            // Wait for someone to connect
+            this.peer.on('connection', (conn) => {
+              this.conn = conn;
+              this.connected = true;
+              conn.on('open', () => {
+                startOnlineGame();
+              });
+              conn.on('data', (data) => {
+                if (data.type === 'input') this.lastGuestInput = data.data;
+              });
+              conn.on('close', () => {
+                this.connected = false;
+                isOnlineMode = false;
+                gameState = 'DISCONNECTED';
+                document.getElementById('disconnect-msg').style.display = 'block';
+                if (this.syncInterval) { clearInterval(this.syncInterval); this.syncInterval = null; }
+              });
+
+              // Start syncing game state to guest
+              this.syncInterval = setInterval(() => {
+                if ((gameState === 'FIGHTING' || gameState === 'KO') && this.conn) {
+                  this.sendGameState(serializeGameState());
+                }
+              }, 50);
+            });
+            resolve(true);
           });
-          this.partyRef.child('guestInput').on('value', snap => { if (snap.val()) this.lastGuestInput = snap.val(); });
-          return true;
-        } catch (e) { setStatus('ERROR: ' + e.message); return false; }
+
+          this.peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') {
+              setStatus('ROOM CODE TAKEN — TRY ANOTHER');
+            } else {
+              setStatus('ERROR: ' + err.message);
+            }
+            resolve(false);
+          });
+        });
       },
+
       async joinParty(pw) {
-        if (!this.inited) { setStatus('FIREBASE NOT CONFIGURED'); return false; }
-        if (!pw.trim()) { setStatus('ENTER A PASSWORD'); return false; }
-        try {
-          const snap = await this.db.ref('parties').orderByChild('password').equalTo(pw.trim().toUpperCase()).once('value');
-          const parties = snap.val();
-          if (!parties) { setStatus('NO PARTY FOUND'); return false; }
-          let foundId = null;
-          for (const [id, p] of Object.entries(parties)) { if (p.status === 'waiting' && !p.guestId) { foundId = id; break; } }
-          if (!foundId) { setStatus('PARTY IS FULL'); return false; }
-          this.partyId = foundId; this.isHost = false;
-          this.partyRef = this.db.ref('parties/' + foundId);
-          this.opponentConnected = true;
-          await this.partyRef.update({ guestId: this.playerId, status: 'fighting' });
-          this.partyRef.child('guestId').onDisconnect().set(null);
-          this.partyRef.child('gameState').on('value', snap => { if (snap.val()) remoteGameState = snap.val(); });
-          this.partyRef.on('value', snap => { if (!snap.val()) { this.opponentConnected = false; isOnlineMode = false; gameState = 'DISCONNECTED'; document.getElementById('disconnect-msg').style.display = 'block'; } });
-          startOnlineGame();
-          return true;
-        } catch (e) { setStatus('ERROR: ' + e.message); return false; }
+        if (!pw.trim()) { setStatus('ENTER A ROOM CODE'); return false; }
+        const roomId = 'knockout_' + pw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        setStatus('CONNECTING...');
+
+        return new Promise((resolve) => {
+          this.peer = new Peer();
+          this.isHost = false;
+
+          this.peer.on('open', () => {
+            this.conn = this.peer.connect(roomId, { reliable: true });
+
+            this.conn.on('open', () => {
+              this.connected = true;
+              startOnlineGame();
+              resolve(true);
+            });
+
+            this.conn.on('data', (data) => {
+              if (data.type === 'state') remoteGameState = data.data;
+            });
+
+            this.conn.on('close', () => {
+              this.connected = false;
+              isOnlineMode = false;
+              gameState = 'DISCONNECTED';
+              document.getElementById('disconnect-msg').style.display = 'block';
+            });
+
+            // Timeout if no connection
+            setTimeout(() => {
+              if (!this.connected) {
+                setStatus('ROOM NOT FOUND — CHECK THE CODE');
+                resolve(false);
+              }
+            }, 8000);
+          });
+
+          this.peer.on('error', (err) => {
+            setStatus('ERROR: ' + err.message);
+            resolve(false);
+          });
+        });
       },
-      sendInput(inp) { if (this.partyRef && !this.isHost) this.partyRef.child('guestInput').set(inp); },
-      sendGameState(s) { if (this.partyRef && this.isHost) this.partyRef.child('gameState').set(s); },
-      leave() {
-        if (this.partyRef) {
-          if (this.isHost) this.partyRef.remove(); else this.partyRef.update({ guestId: null, status: 'ended' });
-          this.partyRef.off(); this.partyRef = null;
+
+      sendInput(inp) {
+        if (this.conn && this.conn.open && !this.isHost) {
+          this.conn.send({ type: 'input', data: inp });
         }
-        this.partyId = null; this.isHost = false; this.opponentConnected = false;
+      },
+      sendGameState(s) {
+        if (this.conn && this.conn.open && this.isHost) {
+          this.conn.send({ type: 'state', data: s });
+        }
+      },
+      leave() {
+        if (this.syncInterval) { clearInterval(this.syncInterval); this.syncInterval = null; }
+        if (this.conn) { this.conn.close(); this.conn = null; }
+        if (this.peer) { this.peer.destroy(); this.peer = null; }
+        this.isHost = false; this.connected = false;
         this.lastGuestInput = {}; isOnlineMode = false; remoteGameState = null;
       }
     };
@@ -2326,7 +2381,7 @@
       if (ok) {
         document.getElementById('party-menu').style.display = 'none';
         document.getElementById('waiting-screen').style.display = 'block';
-        document.getElementById('waiting-code').textContent = 'PASSWORD: ' + pw.trim().toUpperCase();
+        document.getElementById('waiting-code').textContent = 'ROOM: ' + pw.trim().toUpperCase();
       }
     });
     document.getElementById('btn-join-party').addEventListener('click', async () => {
@@ -2344,7 +2399,7 @@
       document.getElementById('disconnect-msg').style.display = 'none';
       PM.leave(); showPartyMenu = false; gameState = 'TITLE';
     });
-    // Prevent game keys while typing password
+    // Prevent game keys while typing room code
     document.getElementById('party-password').addEventListener('keydown', e => e.stopPropagation());
     document.getElementById('party-password').addEventListener('keyup', e => e.stopPropagation());
 
@@ -2364,135 +2419,6 @@
     PM.init();
     resetFighters();
     requestAnimationFrame(gameLoop);
-
-    // ── LAN Play Module ──
-    const LAN = {
-      ws: null,
-      isHost: false,
-      connected: false,
-      syncInterval: null,
-
-      connect() {
-        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-        const url = `${proto}://${location.host}`;
-        setStatus('CONNECTING...');
-        this.ws = new WebSocket(url);
-
-        this.ws.onopen = () => {
-          setStatus('CONNECTED — WAITING FOR OPPONENT...');
-        };
-
-        this.ws.onmessage = (e) => {
-          let msg;
-          try { msg = JSON.parse(e.data); } catch { return; }
-
-          if (msg.type === 'welcome') {
-            this.isHost = msg.id === 0;
-            setStatus(this.isHost ? 'YOU ARE HOST — WAITING FOR PLAYER 2...' : 'CONNECTED AS PLAYER 2 — WAITING...');
-          }
-
-          if (msg.type === 'full') {
-            setStatus('GAME IS FULL — TRY AGAIN LATER');
-            return;
-          }
-
-          if (msg.type === 'start') {
-            this.isHost = msg.id === 0;
-            this.connected = true;
-            isOnlineMode = true;
-            document.getElementById('party-overlay').style.display = 'none';
-            showPartyMenu = false;
-
-            // Both go to char select
-            gameState = 'CHARSELECT';
-
-            // Host syncs game state
-            if (this.isHost) {
-              this.syncInterval = setInterval(() => {
-                if (gameState === 'FIGHTING' || gameState === 'KO') {
-                  this.send({ type: 'state', data: serializeGameState() });
-                }
-              }, 50); // 20fps sync
-            }
-          }
-
-          if (msg.type === 'disconnect') {
-            this.disconnect();
-            gameState = 'DISCONNECTED';
-            document.getElementById('disconnect-msg').style.display = 'block';
-          }
-
-          // Game state from host (for guest)
-          if (msg.type === 'state' && !this.isHost) {
-            remoteGameState = msg.data;
-          }
-
-          // Input from guest (for host)
-          if (msg.type === 'input' && this.isHost) {
-            PM.lastGuestInput = msg.data;
-          }
-
-          // Guest started fight
-          if (msg.type === 'fight_start') {
-            if (this.isHost) {
-              startGame();
-            }
-          }
-        };
-
-        this.ws.onclose = () => {
-          if (this.connected) {
-            this.disconnect();
-            gameState = 'DISCONNECTED';
-            document.getElementById('disconnect-msg').style.display = 'block';
-          }
-        };
-      },
-
-      send(msg) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.ws.send(JSON.stringify(msg));
-        }
-      },
-
-      disconnect() {
-        this.connected = false;
-        isOnlineMode = false;
-        if (this.syncInterval) { clearInterval(this.syncInterval); this.syncInterval = null; }
-        if (this.ws) { this.ws.close(); this.ws = null; }
-      }
-    };
-
-    // LAN Play button
-    document.getElementById('btn-lan-play').addEventListener('click', () => {
-      LAN.connect();
-    });
-
-    // Override startGame for LAN mode — host notifies guest
-    const _origStartGame = startGame;
-    startGame = function () {
-      _origStartGame();
-      if (LAN.connected) {
-        LAN.send({ type: 'fight_start' });
-      }
-    };
-
-    // In the game loop, LAN guest sends input instead of simulating
-    const _origLoop = null; // We hook into the existing input section via LAN flags
-    // The existing online mode code already handles guest input sending
-    // We just need to make PM.isHost and PM.sendInput work with LAN
-    PM.isHost = false;
-    Object.defineProperty(PM, 'isHost', {
-      get() { return LAN.connected ? LAN.isHost : this._isHost; },
-      set(v) { this._isHost = v; }
-    });
-    PM.sendInput = function (inp) {
-      if (LAN.connected && !LAN.isHost) {
-        LAN.send({ type: 'input', data: inp });
-      } else if (this.partyRef && !this._isHost) {
-        this.partyRef.child('guestInput').set(inp);
-      }
-    };
   </script>
 </body>
 
