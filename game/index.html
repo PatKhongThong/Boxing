@@ -254,7 +254,7 @@
   <div>
     <div
       style="color:#777; font-size:8px; text-align:center; margin-bottom:8px; letter-spacing:1px; font-family:'Press Start 2P',monospace;">
-      Made by Phat Khongthong from GIS :)</div>
+      Made by Phat Khongthong from GIS AND I AM NOT GOING TO SING IN MATH CLASS AGAIN :)</div>
     <div id="wrapper">
       <canvas id="game" width="640" height="400"></canvas>
       <div id="scanlines"></div>
@@ -390,6 +390,58 @@
     let guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
     let lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
 
+    // ── Character Roster ──
+    let selectedCharIdx = 0;
+    const CHARACTERS = [
+      {
+        name: 'FLASH',
+        title: 'SPEED DEMON',
+        desc: 'Lightning fast, glass cannon',
+        // Stats (very different!)
+        hp: 65, stamina: 130, speed: 5.5, retreatMod: 0.9, jumpForce: -10, blockDmgReduction: 0.6,
+        dmgMult: 0.7, staminaRegen: 20,
+        // Visual: small, lean build
+        bodyScale: 0.85, headSize: 0.9, armThick: 3, legThick: 3.5,
+        hairStyle: 'mohawk',
+        colors: {
+          main: '#22ccff', dark: '#1188aa', skin: '#ddb888', glove: '#ff2222',
+          skinShd: '#bb9566', hair: '#ffdd00', shoe: '#111133', trim: '#22eeff'
+        },
+        // Stat display values (out of 5)
+        statBars: { SPD: 5, PWR: 2, HP: 2, STA: 5, DEF: 1 }
+      },
+      {
+        name: 'TANK',
+        title: 'THE BRUISER',
+        desc: 'Slow but devastating power',
+        hp: 160, stamina: 70, speed: 1.8, retreatMod: 0.5, jumpForce: -6, blockDmgReduction: 0.85,
+        dmgMult: 1.6, staminaRegen: 6,
+        // Visual: big, wide build
+        bodyScale: 1.25, headSize: 1.1, armThick: 7, legThick: 6,
+        hairStyle: 'bald',
+        colors: {
+          main: '#ff4422', dark: '#aa2211', skin: '#c49960', glove: '#333333',
+          skinShd: '#a07740', hair: '#c49960', shoe: '#441111', trim: '#ff6644'
+        },
+        statBars: { SPD: 1, PWR: 5, HP: 5, STA: 2, DEF: 5 }
+      },
+      {
+        name: 'ACE',
+        title: 'ALL-ROUNDER',
+        desc: 'Balanced fighter, jack of all trades',
+        hp: 100, stamina: 100, speed: 3, retreatMod: 0.7, jumpForce: -8, blockDmgReduction: 0.7,
+        dmgMult: 1.0, staminaRegen: 12,
+        // Visual: medium build
+        bodyScale: 1.0, headSize: 1.0, armThick: 5, legThick: 5,
+        hairStyle: 'short',
+        colors: {
+          main: '#4488ff', dark: '#2255bb', skin: '#ffcc88', glove: '#ff4444',
+          skinShd: '#dda866', hair: '#3a2210', shoe: '#222244', trim: '#66aaff'
+        },
+        statBars: { SPD: 3, PWR: 3, HP: 3, STA: 3, DEF: 3 }
+      }
+    ];
+
     // ── Floating damage text ──
     function spawnFloatingText(x, y, text, color) {
       floatingTexts.push({ x, y, text, color, life: 1.0, vy: -1.5 });
@@ -487,7 +539,7 @@
 
         // Stamina regen
         if (!this.attacking && !this.blocking) {
-          this.stamina = Math.min(this.maxStamina, this.stamina + 12 * dt);
+          this.stamina = Math.min(this.maxStamina, this.stamina + (this.staminaRegen || 12) * dt);
         }
 
         // Jump / Gravity
@@ -960,8 +1012,37 @@
     // ── Fighters ──
     let player, enemy;
     function resetFighters() {
-      player = new Boxer(RING.x + 120, 1, { main: C.p1, dark: C.p1dark, skin: C.p1skin, glove: C.p1glove, skinShd: C.p1skinShd, hair: C.p1hair, shoe: C.p1shoe, trim: C.p1trim }, 'PLAYER', true);
-      enemy = new Boxer(RING.x + RING.w - 120, -1, { main: C.p2, dark: C.p2dark, skin: C.p2skin, glove: C.p2glove, skinShd: C.p2skinShd, hair: C.p2hair, shoe: C.p2shoe, trim: C.p2trim }, 'CPU', false);
+      const ch = CHARACTERS[selectedCharIdx];
+      player = new Boxer(RING.x + 120, 1, {
+        main: ch.colors.main, dark: ch.colors.dark, skin: ch.colors.skin, glove: ch.colors.glove,
+        skinShd: ch.colors.skinShd, hair: ch.colors.hair, shoe: ch.colors.shoe, trim: ch.colors.trim
+      }, ch.name, true);
+      // Apply character stats to player
+      player.hp = ch.hp; player.maxHp = ch.hp;
+      player.stamina = ch.stamina; player.maxStamina = ch.stamina;
+      player.speed = ch.speed; player.retreatMod = ch.retreatMod;
+      player.jumpForce = ch.jumpForce; player.blockDmgReduction = ch.blockDmgReduction;
+      player.dmgMult = ch.dmgMult; player.staminaRegen = ch.staminaRegen;
+      player.bodyScale = ch.bodyScale; player.headSize = ch.headSize;
+      player.armThick = ch.armThick; player.legThick = ch.legThick;
+      player.hairStyle = ch.hairStyle;
+
+      // CPU always picks a random different character
+      let cpuIdx = Math.floor(Math.random() * CHARACTERS.length);
+      while (cpuIdx === selectedCharIdx && CHARACTERS.length > 1) cpuIdx = Math.floor(Math.random() * CHARACTERS.length);
+      const cpuCh = CHARACTERS[cpuIdx];
+      enemy = new Boxer(RING.x + RING.w - 120, -1, {
+        main: cpuCh.colors.main, dark: cpuCh.colors.dark, skin: cpuCh.colors.skin, glove: cpuCh.colors.glove,
+        skinShd: cpuCh.colors.skinShd, hair: cpuCh.colors.hair, shoe: cpuCh.colors.shoe, trim: cpuCh.colors.trim
+      }, cpuCh.name, false);
+      enemy.hp = cpuCh.hp; enemy.maxHp = cpuCh.hp;
+      enemy.stamina = cpuCh.stamina; enemy.maxStamina = cpuCh.stamina;
+      enemy.speed = cpuCh.speed; enemy.retreatMod = cpuCh.retreatMod;
+      enemy.jumpForce = cpuCh.jumpForce; enemy.blockDmgReduction = cpuCh.blockDmgReduction;
+      enemy.dmgMult = cpuCh.dmgMult; enemy.staminaRegen = cpuCh.staminaRegen;
+      enemy.bodyScale = cpuCh.bodyScale; enemy.headSize = cpuCh.headSize;
+      enemy.armThick = cpuCh.armThick; enemy.legThick = cpuCh.legThick;
+      enemy.hairStyle = cpuCh.hairStyle;
     }
     function resetRound() {
       resetFighters();
@@ -1153,7 +1234,7 @@
         attacker.hitRegistered = true;
         const hitY = hb.y + hb.h / 2;
         const headZone = victim.headY + 5;
-        let dmg = attacker.currentPunch.dmg;
+        let dmg = attacker.currentPunch.dmg * (attacker.dmgMult || 1);
         let isHead = hitY < headZone && !attacker.currentPunch.bodyShot;
         if (isHead) dmg *= attacker.currentPunch.headMult;
 
@@ -1656,6 +1737,195 @@
       drawVignette(ctx);
     }
 
+    // ── Character Selection Screen ──
+    function drawCharSelect(ctx) {
+      ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+      drawAudience(ctx);
+
+      const now = performance.now();
+
+      // Title
+      ctx.textAlign = 'center';
+      ctx.fillStyle = C.gold; ctx.font = '16px "Press Start 2P"';
+      ctx.fillText('SELECT YOUR FIGHTER', W / 2, 40);
+
+      const cardW = 180, cardH = 280, gap = 15;
+      const totalW = CHARACTERS.length * cardW + (CHARACTERS.length - 1) * gap;
+      const startX = (W - totalW) / 2;
+
+      for (let i = 0; i < CHARACTERS.length; i++) {
+        const ch = CHARACTERS[i];
+        const cx = startX + i * (cardW + gap);
+        const cy = 55;
+        const isSelected = i === selectedCharIdx;
+        const isHover = charHoverIdx === i;
+
+        // Card background
+        ctx.fillStyle = isSelected ? 'rgba(255,220,68,0.15)' : 'rgba(20,10,35,0.85)';
+        ctx.fillRect(cx, cy, cardW, cardH);
+
+        // Card border (animated glow for selected)
+        if (isSelected) {
+          ctx.strokeStyle = C.gold; ctx.lineWidth = 3;
+          ctx.shadowColor = C.gold; ctx.shadowBlur = 10 + Math.sin(now * 0.005) * 5;
+        } else if (isHover) {
+          ctx.strokeStyle = '#888'; ctx.lineWidth = 2; ctx.shadowBlur = 0;
+        } else {
+          ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.shadowBlur = 0;
+        }
+        ctx.strokeRect(cx, cy, cardW, cardH);
+        ctx.shadowBlur = 0;
+
+        // Character name
+        ctx.fillStyle = isSelected ? C.gold : ch.colors.main;
+        ctx.font = '12px "Press Start 2P"'; ctx.textAlign = 'center';
+        ctx.fillText(ch.name, cx + cardW / 2, cy + 22);
+
+        // Title
+        ctx.fillStyle = '#888'; ctx.font = '5px "Press Start 2P"';
+        ctx.fillText(ch.title, cx + cardW / 2, cy + 34);
+
+        // Character preview (silhouette/body)
+        const previewX = cx + cardW / 2;
+        const previewY = cy + 130;
+        const sc = ch.bodyScale;
+
+        ctx.save();
+        ctx.translate(previewX, previewY);
+
+        // Idle bobbing
+        const bob = Math.sin(now * 0.004 + i * 2) * 2;
+
+        // Legs
+        ctx.strokeStyle = ch.colors.skin; ctx.lineWidth = ch.legThick;
+        ctx.beginPath(); ctx.moveTo(-8 * sc, 0); ctx.lineTo(-10 * sc, 30 * sc); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(8 * sc, 0); ctx.lineTo(10 * sc, 30 * sc); ctx.stroke();
+
+        // Boots
+        ctx.fillStyle = ch.colors.shoe;
+        ctx.fillRect(-14 * sc, 26 * sc, 8 * sc, 8 * sc);
+        ctx.fillRect(6 * sc, 26 * sc, 8 * sc, 8 * sc);
+
+        // Shorts
+        ctx.fillStyle = ch.colors.main;
+        ctx.fillRect(-12 * sc, -5, 24 * sc, 14 * sc);
+        ctx.fillStyle = ch.colors.trim;
+        ctx.fillRect(-12 * sc, 7 * sc, 24 * sc, 3);
+
+        // Torso
+        ctx.fillStyle = ch.colors.skin;
+        ctx.beginPath();
+        ctx.moveTo(-12 * sc, -5 + bob); ctx.lineTo(12 * sc, -5 + bob);
+        ctx.lineTo(14 * sc, -30 * sc + bob); ctx.lineTo(-14 * sc, -30 * sc + bob);
+        ctx.closePath(); ctx.fill();
+
+        // Shoulder caps
+        ctx.fillStyle = ch.colors.skinShd;
+        ctx.beginPath(); ctx.arc(-14 * sc, -28 * sc + bob, 5 * sc, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(14 * sc, -28 * sc + bob, 5 * sc, 0, Math.PI * 2); ctx.fill();
+
+        // Arms (guard position, animated)
+        const guardBob = Math.sin(now * 0.006 + i) * 3;
+        ctx.strokeStyle = ch.colors.skin; ctx.lineWidth = ch.armThick;
+        // Left arm
+        ctx.beginPath(); ctx.moveTo(-14 * sc, -26 * sc + bob);
+        ctx.lineTo(-18 * sc, -15 * sc + bob + guardBob); ctx.stroke();
+        // Right arm
+        ctx.beginPath(); ctx.moveTo(14 * sc, -26 * sc + bob);
+        ctx.lineTo(18 * sc, -15 * sc + bob - guardBob); ctx.stroke();
+
+        // Gloves
+        ctx.fillStyle = ch.colors.glove;
+        ctx.beginPath(); ctx.arc(-18 * sc, -15 * sc + bob + guardBob, 7 * sc, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(18 * sc, -15 * sc + bob - guardBob, 7 * sc, 0, Math.PI * 2); ctx.fill();
+
+        // Head
+        const headR = 12 * ch.headSize * sc;
+        const headY = -35 * sc + bob;
+        ctx.fillStyle = ch.colors.skin;
+        ctx.beginPath(); ctx.arc(0, headY, headR, 0, Math.PI * 2); ctx.fill();
+
+        // Hair style
+        ctx.fillStyle = ch.colors.hair;
+        if (ch.hairStyle === 'mohawk') {
+          // Spiky mohawk
+          for (let s = -3; s <= 3; s++) {
+            ctx.beginPath();
+            ctx.moveTo(s * 2.5, headY - headR + 2);
+            ctx.lineTo(s * 1.5, headY - headR - 8);
+            ctx.lineTo(s * 2.5 + 2, headY - headR + 2);
+            ctx.fill();
+          }
+        } else if (ch.hairStyle === 'bald') {
+          // Bald — just a shine
+          ctx.fillStyle = 'rgba(255,255,255,0.1)';
+          ctx.beginPath(); ctx.arc(-2, headY - headR * 0.5, headR * 0.4, 0, Math.PI * 2); ctx.fill();
+        } else {
+          // Short cropped
+          ctx.beginPath();
+          ctx.arc(0, headY - 2, headR + 1, Math.PI, 0); ctx.fill();
+        }
+
+        // Eyes
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(-4, headY - 1, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(4, headY - 1, 2.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.beginPath(); ctx.arc(-3.5, headY - 0.5, 1.2, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(4.5, headY - 0.5, 1.2, 0, Math.PI * 2); ctx.fill();
+
+        ctx.restore();
+
+        // Description
+        ctx.fillStyle = '#aaa'; ctx.font = '5px "Press Start 2P"'; ctx.textAlign = 'center';
+        ctx.fillText(ch.desc, cx + cardW / 2, cy + 200);
+
+        // Stat bars
+        const statNames = Object.keys(ch.statBars);
+        const barStartY = cy + 215;
+        for (let s = 0; s < statNames.length; s++) {
+          const sn = statNames[s];
+          const sv = ch.statBars[sn];
+          const sy = barStartY + s * 12;
+
+          ctx.fillStyle = '#666'; ctx.font = '5px "Press Start 2P"'; ctx.textAlign = 'left';
+          ctx.fillText(sn, cx + 10, sy + 4);
+
+          // Stat bar background
+          ctx.fillStyle = '#1a1a1a';
+          ctx.fillRect(cx + 45, sy - 2, 120, 8);
+
+          // Stat bar fill
+          const barColors = { 1: '#ff4444', 2: '#ff8844', 3: '#ffdd44', 4: '#88dd44', 5: '#44ff44' };
+          ctx.fillStyle = barColors[sv] || '#888';
+          ctx.fillRect(cx + 45, sy - 2, (sv / 5) * 120, 8);
+        }
+      }
+
+      // Instructions
+      ctx.fillStyle = '#666'; ctx.font = '6px "Press Start 2P"'; ctx.textAlign = 'center';
+      ctx.fillText('CLICK TO SELECT  •  PRESS SPACE OR CLICK START TO FIGHT', W / 2, H - 20);
+
+      // Start button
+      const btnW = 160, btnH = 24;
+      const btnX = W / 2 - btnW / 2, btnY = H - 55;
+      ctx.fillStyle = CHARACTERS[selectedCharIdx].colors.main;
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = C.gold; ctx.lineWidth = 2;
+      ctx.strokeRect(btnX, btnY, btnW, btnH);
+      ctx.fillStyle = '#000'; ctx.font = '8px "Press Start 2P"'; ctx.textAlign = 'center';
+      ctx.fillText('START FIGHT', W / 2, btnY + 16);
+
+      // Store button region for click detection
+      charSelectBtnRegion = { x: btnX, y: btnY, w: btnW, h: btnH };
+
+      drawVignette(ctx);
+    }
+
+    // Click regions for character select
+    let charHoverIdx = -1;
+    let charSelectBtnRegion = null;
+
     function drawKO(ctx) {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#000a'; ctx.fillRect(0, 0, W, H);
@@ -1695,7 +1965,11 @@
 
       if (gameState === 'TITLE') {
         drawTitle(ctx);
-        // Space to start is now handled by VS CPU button, but keep as shortcut
+        return;
+      }
+
+      if (gameState === 'CHARSELECT') {
+        drawCharSelect(ctx);
         return;
       }
 
@@ -1976,7 +2250,61 @@
     document.getElementById('btn-vs-cpu').addEventListener('click', () => {
       document.getElementById('party-overlay').style.display = 'none';
       showPartyMenu = false; isOnlineMode = false;
-      startGame();
+      gameState = 'CHARSELECT';
+    });
+
+    // Character select click handling
+    canvas.addEventListener('click', (e) => {
+      if (gameState !== 'CHARSELECT') return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = W / rect.width, scaleY = H / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+
+      // Check card clicks
+      const cardW = 180, cardH = 280, gap = 15;
+      const totalW = CHARACTERS.length * cardW + (CHARACTERS.length - 1) * gap;
+      const startX = (W - totalW) / 2;
+      for (let i = 0; i < CHARACTERS.length; i++) {
+        const cx = startX + i * (cardW + gap), cy = 55;
+        if (mx >= cx && mx <= cx + cardW && my >= cy && my <= cy + cardH) {
+          selectedCharIdx = i;
+        }
+      }
+
+      // Check start button click
+      if (charSelectBtnRegion) {
+        const b = charSelectBtnRegion;
+        if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+          startGame();
+        }
+      }
+    });
+
+    // Hover tracking for char select
+    canvas.addEventListener('mousemove', (e) => {
+      if (gameState !== 'CHARSELECT') { charHoverIdx = -1; return; }
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = W / rect.width, scaleY = H / rect.height;
+      const mx = (e.clientX - rect.left) * scaleX;
+      const my = (e.clientY - rect.top) * scaleY;
+      charHoverIdx = -1;
+      const cardW = 180, cardH = 280, gap = 15;
+      const totalW = CHARACTERS.length * cardW + (CHARACTERS.length - 1) * gap;
+      const startX = (W - totalW) / 2;
+      for (let i = 0; i < CHARACTERS.length; i++) {
+        const cx = startX + i * (cardW + gap), cy = 55;
+        if (mx >= cx && mx <= cx + cardW && my >= cy && my <= cy + cardH) {
+          charHoverIdx = i;
+        }
+      }
+    });
+
+    // Space to start from charselect
+    window.addEventListener('keydown', (e) => {
+      if (gameState === 'CHARSELECT' && e.code === 'Space') {
+        startGame(); e.preventDefault();
+      }
     });
     document.getElementById('btn-make-party').addEventListener('click', async () => {
       const pw = document.getElementById('party-password').value;
