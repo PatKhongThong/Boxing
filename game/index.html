@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KNOCKOUT! — Retro Boxing</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;600&display=swap');
 
     * {
       margin: 0;
@@ -15,25 +15,24 @@
     }
 
     body {
-      background: #0a0a0a;
+      background: #050508;
       display: flex;
       justify-content: center;
       align-items: center;
       min-height: 100vh;
-      font-family: 'Press Start 2P', monospace;
+      font-family: 'Outfit', sans-serif;
       overflow: hidden;
-      cursor: crosshair
+      cursor: crosshair;
+      color: #fff;
     }
 
     #wrapper {
       position: relative;
-      image-rendering: pixelated
     }
 
     canvas {
       display: block;
-      image-rendering: pixelated;
-      border: 4px solid #333;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       box-shadow: 0 0 40px rgba(255, 100, 50, .15), inset 0 0 80px rgba(0, 0, 0, .3)
     }
 
@@ -86,28 +85,33 @@
     }
 
     #party-menu h3 {
-      color: #f85;
-      font-family: 'Press Start 2P', monospace;
-      font-size: 11px;
-      margin-bottom: 4px;
+      color: #ffdd44;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 900;
+      font-size: 16px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
 
     #party-password {
-      font-family: 'Press Start 2P', monospace;
-      font-size: 9px;
-      padding: 8px 12px;
-      background: #1a1020;
-      border: 2px solid #555;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      padding: 12px 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       color: #fff;
       text-align: center;
       outline: none;
       width: 220px;
       letter-spacing: 2px;
       text-transform: uppercase;
+      transition: all 0.2s;
     }
 
     #party-password:focus {
-      border-color: #f85;
+      border-color: #ffdd44;
+      background: rgba(255, 255, 255, 0.1);
     }
 
     .party-btn {
@@ -121,15 +125,29 @@
       width: 220px;
     }
 
+    #btn-vs-cpu,
+    #btn-make-party,
+    #btn-join-party,
+    #btn-cancel-party {
+      padding: 12px 24px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      width: 100%;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
     #btn-make-party {
-      background: #2a1a30;
-      color: #44dd44;
-      border-color: #44dd44;
+      background: #4488ff;
+      color: #fff;
     }
 
     #btn-make-party:hover {
-      background: #44dd44;
-      color: #000;
+      background: #2255bb;
     }
 
     #btn-join-party {
@@ -316,15 +334,15 @@
 
     // ── Color Palette ──
     const C = {
-      bg: '#1a1020', ring: '#2a1a30', ropes: '#e84040', ropeShadow: '#a02020',
-      post: '#c8a860', floor: '#3a2a40', floorLine: '#4a3a55',
-      p1: '#4488ff', p1dark: '#2255bb', p1skin: '#ffcc88', p1glove: '#ff4444',
-      p1skinShd: '#dda866', p1hair: '#3a2210', p1shoe: '#222244', p1trim: '#66aaff',
-      p2: '#ff5533', p2dark: '#bb2211', p2skin: '#eebb77', p2glove: '#4444ff',
-      p2skinShd: '#cc9955', p2hair: '#1a1a1a', p2shoe: '#442222', p2trim: '#ff8866',
+      bg: '#050508', ring: '#15101a', ropes: '#ff3333', ropeShadow: '#501010',
+      post: '#b89850', floor: '#0d0d12', floorLine: '#1a1a25',
+      p1: '#4488ff', p1dark: '#1144aa', p1skin: '#ffcc88', p1glove: '#ff2222',
+      p1skinShd: '#cc9966', p1hair: '#2a1a10', p1shoe: '#1a1a2a', p1trim: '#00ccff',
+      p2: '#ff4422', p2dark: '#aa1111', p2skin: '#eebb77', p2glove: '#2222ff',
+      p2skinShd: '#bb8844', p2hair: '#111', p2shoe: '#221111', p2trim: '#ff8844',
       white: '#ffffff', black: '#000000',
-      hpGreen: '#44dd44', hpYellow: '#dddd44', hpRed: '#dd4444',
-      stamina: '#44aaff', gold: '#ffdd44', textShadow: '#220a00',
+      hpGreen: '#00ffaa', hpYellow: '#ffdd44', hpRed: '#ff4444',
+      stamina: '#44aaff', gold: '#ffdd44', textShadow: 'rgba(0,0,0,0.5)',
     };
 
     // ── Game State ──
@@ -709,6 +727,7 @@
         const punchLeanY = this.currentPunch ? this.currentPunch.leanY * this.punchArmExt : 0;
         const lx = lean + punchLean; // combined lean X
         const ly = punchLeanY;       // combined lean Y
+
         const sk = flash ? '#fff' : this.colors.skin;
         const skShd = flash ? '#ddd' : (this.colors.skinShd || this.colors.skin);
         const mainC = flash ? '#fff' : this.colors.main;
@@ -723,283 +742,213 @@
         ctx.translate(this.x, this.y);
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
-        // ── Ground Shadow ──
+        const s = this.bodyScale || 1.0;
+
+        // ── Ground Shadow (Soft Gradient) ──
         const jumpH = this.groundY - this.y;
-        const ss = Math.max(0.3, 1 - jumpH / 80);
-        ctx.fillStyle = `rgba(0,0,0,${0.35 * ss})`;
+        const ss = Math.max(0.2, 1 - jumpH / 100);
+        const shadowGrd = ctx.createRadialGradient(0, this.groundY - this.y + 2, 0, 0, this.groundY - this.y + 2, 25 * ss * s);
+        shadowGrd.addColorStop(0, `rgba(0,0,0,${0.4 * ss})`);
+        shadowGrd.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = shadowGrd;
         ctx.beginPath();
-        ctx.ellipse(0, this.groundY - this.y + 2, 22 * ss, 6 * ss, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, this.groundY - this.y + 2, 25 * ss * s, 8 * ss * s, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // ── Helper: draw a two-segment limb with joint ──
-        const drawLimb = (sx, sy, ex, ey, thickness, color, jointR) => {
-          const mx = (sx + ex) * 0.5 + (ey - sy) * 0.15 * f;
-          const my = (sy + ey) * 0.5 + (sx - ex) * 0.05;
-          ctx.strokeStyle = color; ctx.lineWidth = thickness;
-          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(mx, my); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(ex, ey); ctx.stroke();
-          // Joint circle
-          ctx.fillStyle = color;
-          ctx.beginPath(); ctx.arc(mx, my, jointR, 0, Math.PI * 2); ctx.fill();
+        // ── Helper: draw high-fidelity limb ──
+        const drawLimb = (sx, sy, ex, ey, thick, color, muscleLvl = 1) => {
+          const midX = (sx + ex) * 0.5 + (ey - sy) * 0.15 * f;
+          const midY = (sy + ey) * 0.5 + (sx - ex) * 0.05;
+
+          // Outer Stroke / Skin
+          ctx.strokeStyle = color; ctx.lineWidth = thick;
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.quadraticCurveTo(midX, midY, ex, ey); ctx.stroke();
+
+          if (!flash) {
+            // Muscle Highlighting
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = thick * 0.3;
+            ctx.beginPath(); ctx.moveTo(sx + f * 1, sy); ctx.quadraticCurveTo(midX + f * 1, midY, ex + f * 1, ey); ctx.stroke();
+            // Muscle Shadows
+            ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.lineWidth = thick * 0.4;
+            ctx.beginPath(); ctx.moveTo(sx - f * 2, sy + 1); ctx.quadraticCurveTo(midX - f * 2, midY + 1, ex - f * 2, ey + 1); ctx.stroke();
+          }
         };
 
-        // ── Legs (two-segment with knee + boxing boots) ──
-        const hipY = -12 + bob + ly;
-        // Back leg
-        const blHipX = -f * 5 + lx, blFootX = -f * 12;
-        drawLimb(blHipX, hipY, blFootX, -1, 5, skShd, 2.5);
-        // Boot
-        ctx.fillStyle = shoeC;
-        ctx.beginPath();
-        ctx.ellipse(blFootX, 0, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = darkC;
-        ctx.fillRect(blFootX - 4, -3, 8, 2); // boot cuff
+        const hipY = -15 * s + bob + ly;
+        const legThick = this.legThick * s;
 
-        // Front leg
-        const flHipX = f * 5 + lx, flFootX = f * 12;
-        drawLimb(flHipX, hipY, flFootX, -1, 5.5, sk, 2.5);
-        // Boot
+        // ── Back Leg ──
+        const blHipX = -f * 6 * s + lx, blFootX = -f * 14 * s;
+        drawLimb(blHipX, hipY, blFootX, -1, legThick, skShd);
+        // Boot (Back)
         ctx.fillStyle = shoeC;
-        ctx.beginPath();
-        ctx.ellipse(flFootX, 0, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = darkC;
-        ctx.fillRect(flFootX - 4, -3, 8, 2); // boot cuff
-        // Lace detail
-        ctx.strokeStyle = '#888'; ctx.lineWidth = 0.5;
-        for (let li = 0; li < 3; li++) {
-          const liy = -1 + li * 1.5;
-          ctx.beginPath(); ctx.moveTo(flFootX - 2, liy - 3); ctx.lineTo(flFootX + 2, liy - 3); ctx.stroke();
-        }
+        ctx.beginPath(); ctx.roundRect(blFootX - 6 * s, -4 * s, 12 * s, 6 * s, 3 * s); ctx.fill();
 
-        // ── Shorts (shaped with waistband + trim stripe) ──
+        // ── Front Leg ──
+        const flHipX = f * 6 * s + lx, flFootX = f * 14 * s;
+        drawLimb(flHipX, hipY, flFootX, -1, legThick + 1, sk);
+        // Boot (Front)
+        ctx.fillStyle = shoeC;
+        ctx.beginPath(); ctx.roundRect(flFootX - 7 * s, -5 * s, 14 * s, 7 * s, 4 * s); ctx.fill();
+        // Boot detail (sole + laces)
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(flFootX - 7 * s, -1 * s, 14 * s, 2 * s);
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1;
+        for (let li = 0; li < 3; li++) { ctx.beginPath(); ctx.moveTo(flFootX - 3 * s, -4 * s + li * 2 * s); ctx.lineTo(flFootX + 3 * s, -4 * s + li * 2 * s); ctx.stroke(); }
+
+        // ── Shorts ──
+        const sw = 13 * s, sh = 16 * s;
         ctx.fillStyle = mainC;
         ctx.beginPath();
-        ctx.moveTo(-9 + lx, -18 + bob + ly);
-        ctx.lineTo(9 + lx, -18 + bob + ly);
-        ctx.lineTo(10 + lx, -9 + bob + ly);
-        ctx.lineTo(2 + lx, -8 + bob + ly);
-        ctx.lineTo(-2 + lx, -8 + bob + ly);
-        ctx.lineTo(-10 + lx, -9 + bob + ly);
-        ctx.closePath(); ctx.fill();
+        ctx.roundRect(-sw + lx, -sh - 5 * s + bob + ly, sw * 2, sh, [2 * s, 2 * s, 6 * s, 6 * s]);
+        ctx.fill();
         // Waistband
-        ctx.fillStyle = darkC;
-        ctx.fillRect(-9 + lx, -18 + bob + ly, 18, 3);
-        // Trim stripe at bottom
-        ctx.strokeStyle = trimC; ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(-10 + lx, -10 + bob + ly);
-        ctx.lineTo(10 + lx, -10 + bob + ly); ctx.stroke();
+        const grdW = ctx.createLinearGradient(0, -sh - 5 * s + bob + ly, 0, -sh - 1 * s + bob + ly);
+        grdW.addColorStop(0, darkC); grdW.addColorStop(1, mainC);
+        ctx.fillStyle = grdW;
+        ctx.beginPath(); ctx.roundRect(-sw + lx, -sh - 5 * s + bob + ly, sw * 2, 5 * s, 2 * s); ctx.fill();
+        // Trim
+        ctx.strokeStyle = trimC; ctx.lineWidth = 2 * s;
+        ctx.beginPath(); ctx.moveTo(-sw + lx, -5 * s + bob + ly); ctx.lineTo(sw + lx, -5 * s + bob + ly); ctx.stroke();
 
-        // ── Torso (tapered trapezoid with muscle definition) ──
-        // Body shape
-        ctx.fillStyle = sk;
+        // ── Torso (Anatomical path) ──
+        const tw = 14 * s, th = 24 * s;
+        const tx = lx, ty = -sh - 5 * s + bob + ly;
+
+        // Torso Base Gradient
+        const bodyGrd = ctx.createRadialGradient(tx + f * 5 * s, ty - th * 0.7, 5 * s, tx, ty - th * 0.5, th);
+        bodyGrd.addColorStop(0, sk); bodyGrd.addColorStop(1, skShd);
+        ctx.fillStyle = bodyGrd;
+
         ctx.beginPath();
-        ctx.moveTo(-9 + lx, -18 + bob + ly);  // waist left
-        ctx.lineTo(-11 + lx, -32 + bob + ly); // shoulder left
-        ctx.lineTo(11 + lx, -32 + bob + ly);  // shoulder right
-        ctx.lineTo(9 + lx, -18 + bob + ly);   // waist right
+        ctx.moveTo(tx - sw + 2 * s, ty); // waist left
+        ctx.bezierCurveTo(tx - tw - 2 * s, ty - 8 * s, tx - tw - 4 * s, ty - th + 5 * s, tx - tw, ty - th); // side left
+        ctx.lineTo(tx + tw, ty - th); // shoulder line
+        ctx.bezierCurveTo(tx + tw + 4 * s, ty - th + 5 * s, tx + tw + 2 * s, ty - 8 * s, tx + sw - 2 * s, ty); // side right
         ctx.closePath(); ctx.fill();
 
-        // Shoulder caps
-        ctx.fillStyle = sk;
-        ctx.beginPath(); ctx.arc(-11 + lx, -32 + bob + ly, 4, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(11 + lx, -32 + bob + ly, 4, 0, Math.PI * 2); ctx.fill();
-
-        // Body shading (shadow on far side from ring center spotlight)
-        ctx.fillStyle = skShd;
-        ctx.globalAlpha = 0.35;
-        ctx.beginPath();
-        ctx.moveTo(-f * 1 + lx, -18 + bob + ly);
-        ctx.lineTo(-f * 1 + lx, -32 + bob + ly);
-        ctx.lineTo(-f * 11 + lx, -32 + bob + ly);
-        ctx.lineTo(-f * 9 + lx, -18 + bob + ly);
-        ctx.closePath(); ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Pec / chest line
         if (!flash) {
-          ctx.strokeStyle = skShd; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.5;
-          // Center chest line
-          ctx.beginPath();
-          ctx.moveTo(lx, -31 + bob + ly); ctx.lineTo(lx, -24 + bob + ly); ctx.stroke();
-          // Pec curves
-          ctx.beginPath();
-          ctx.arc(lx - 5, -29 + bob + ly, 5, -0.3, 1.2); ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(lx + 5, -29 + bob + ly, 5, Math.PI - 1.2, Math.PI + 0.3); ctx.stroke();
-          // Ab lines (horizontal)
-          for (let ai = 0; ai < 2; ai++) {
-            const ay = -23 + ai * 4 + bob + ly;
-            ctx.beginPath(); ctx.moveTo(-4 + lx, ay); ctx.lineTo(4 + lx, ay); ctx.stroke();
+          // Muscle Definition Lines
+          ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1 * s;
+          // Center line
+          ctx.beginPath(); ctx.moveTo(tx, ty - th + 4 * s); ctx.lineTo(tx, ty - 4 * s); ctx.stroke();
+          // Pecs
+          ctx.beginPath(); ctx.arc(tx - 6 * s, ty - th + 8 * s, 6 * s, 0, Math.PI * 0.8); ctx.stroke();
+          ctx.beginPath(); ctx.arc(tx + 6 * s, ty - th + 8 * s, 6 * s, Math.PI * 0.2, Math.PI); ctx.stroke();
+          // Abs
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath(); ctx.moveTo(tx - 4 * s, ty - 6 * s - i * 5 * s); ctx.lineTo(tx + 4 * s, ty - 6 * s - i * 5 * s); ctx.stroke();
           }
-          ctx.globalAlpha = 1;
+          // Rim Light
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1.5 * s;
+          ctx.beginPath(); ctx.moveTo(tx + tw - 1 * s, ty - th + 2 * s); ctx.lineTo(tx + sw - 3 * s, ty - 2 * s); ctx.stroke();
         }
 
-        // ── Arms & Gloves ──
-        const isIdlePlayer = this.isPlayer && !this.attacking && !this.blocking && !this.isStunned;
-        const shoulderBackX = -f * 11 + lx, shoulderFrontX = f * 11 + lx;
-        const shoulderY = -33 + bob + ly;
+        // ── Arms ──
+        const ARM_T = this.armThick * s;
+        const sY = ty - th + 3 * s;
+        const sLX = tx - tw, sRX = tx + tw;
 
-        // Helper: draw arm with upper/forearm segments, elbow joint, and glove
-        const drawArm = (sx, sy, ex, ey, thick, gloveR, isBack) => {
-          // Two-segment arm: shoulder→elbow→glove
-          const elbMidX = (sx + ex) * 0.5;
-          const elbMidY = (sy + ey) * 0.5;
-          // Offset elbow slightly outward and downward
-          const elbX = elbMidX + (ey - sy) * 0.2 * f;
-          const elbY = elbMidY + Math.abs(ex - sx) * 0.15;
-          // Upper arm
-          ctx.strokeStyle = sk; ctx.lineWidth = thick + 1;
-          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(elbX, elbY); ctx.stroke();
-          // Forearm (slightly thinner)
-          ctx.lineWidth = thick;
-          ctx.beginPath(); ctx.moveTo(elbX, elbY); ctx.lineTo(ex, ey); ctx.stroke();
-          // Elbow joint
-          ctx.fillStyle = sk;
-          ctx.beginPath(); ctx.arc(elbX, elbY, thick * 0.45, 0, Math.PI * 2); ctx.fill();
-          // Wrist wrap
-          const wx = ex + (elbX - ex) * 0.2;
-          const wy = ey + (elbY - ey) * 0.2;
-          ctx.strokeStyle = '#ddd'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.moveTo(wx - 2, wy); ctx.lineTo(wx + 2, wy); ctx.stroke();
-          // Glove
-          ctx.fillStyle = gc;
+        const drawHighFidArm = (sx, sy, ex, ey, thick, isBack) => {
+          const elbX = (sx + ex) * 0.5 + (ey - sy) * 0.25 * f;
+          const elbY = (sy + ey) * 0.5 + Math.abs(ex - sx) * 0.2;
+
+          // Arm Path
+          ctx.strokeStyle = isBack ? skShd : sk; ctx.lineWidth = thick;
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(elbX, elbY); ctx.lineTo(ex, ey); ctx.stroke();
+
+          // Bicep bulge
+          ctx.fillStyle = isBack ? skShd : sk;
+          ctx.beginPath(); ctx.arc((sx + elbX) * 0.5, (sy + elbY) * 0.5 - 1, thick * 0.6, 0, Math.PI * 2); ctx.fill();
+
+          // Glove (Premium)
+          const gloveR = 10 * s;
+          const gloveGrd = ctx.createRadialGradient(ex - f * 3 * s, ey - 3 * s, 0, ex, ey, gloveR);
+          gloveGrd.addColorStop(0, gc); gloveGrd.addColorStop(0.8, gc); gloveGrd.addColorStop(1, 'rgba(0,0,0,0.3)');
+          ctx.fillStyle = gloveGrd;
           ctx.beginPath(); ctx.arc(ex, ey, gloveR, 0, Math.PI * 2); ctx.fill();
-          // Glove highlight
-          ctx.fillStyle = 'rgba(255,255,255,0.2)';
-          ctx.beginPath(); ctx.arc(ex - 1, ey - 2, gloveR * 0.5, 0, Math.PI * 2); ctx.fill();
-          // Glove outline
-          ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.arc(ex, ey, gloveR, 0, Math.PI * 2); ctx.stroke();
           // Thumb nub
-          const thumbDir = isBack ? -f : f;
-          ctx.fillStyle = gc;
-          ctx.beginPath(); ctx.arc(ex + thumbDir * gloveR * 0.6, ey + 2, gloveR * 0.3, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(ex + (isBack ? -f : f) * 6 * s, ey + 4 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
+          // Gloss
+          ctx.fillStyle = 'rgba(255,255,255,0.2)';
+          ctx.beginPath(); ctx.ellipse(ex - f * 4 * s, ey - 4 * s, 4 * s, 2 * s, Math.PI * 0.25, 0, Math.PI * 2); ctx.fill();
         };
 
-        if (isIdlePlayer) {
-          // ── Mouse-aim: both arms stretch toward cursor ──
-          const armLen = 25;
+        const isIdle = this.isPlayer && !this.attacking && !this.blocking && !this.isStunned;
+        if (isIdle) {
           const angle = this.mouseAimAngle;
-          const aimDx = Math.cos(angle) * armLen;
-          const aimDy = Math.sin(angle) * armLen;
-
-          // Back arm
-          const bsx = shoulderBackX, bsy = shoulderY;
-          drawArm(bsx, bsy, bsx + aimDx * 0.9, bsy + aimDy * 0.9, 4, 6, true);
-          // Front arm
-          const fsx = shoulderFrontX, fsy = shoulderY;
-          drawArm(fsx, fsy, fsx + aimDx, fsy + aimDy, 4.5, 7, false);
+          const aL = 35 * s;
+          const ax = Math.cos(angle) * aL, ay = Math.sin(angle) * aL;
+          drawHighFidArm(sLX, sY, sLX + ax * 0.9, sY + ay * 0.9, ARM_T - 0.5, true);
+          drawHighFidArm(sRX, sY, sRX + ax, sY + ay, ARM_T, false);
         } else {
-          // ── Back arm (default / blocking / stunned) ──
-          const baex = -f * 16 + lx;
-          const baey = -26 + bob + (this.blocking ? -10 : 0) + ly;
-          drawArm(shoulderBackX, shoulderY, baex, baey, 4, 6, true);
-
-          // ── Front arm (punching / blocking / stunned) ──
-          const ext = this.punchArmExt;
-          let fex = f * 16 + lx, fey = -33 + bob + ly;
+          // Back Arm
+          const beX = tx - f * 18 * s, beY = ty - th + 10 * s + (this.blocking ? -12 * s : 0);
+          drawHighFidArm(sLX, sY, beX, beY, ARM_T - 0.5, true);
+          // Front Arm
+          let feX = tx + f * 18 * s, feY = ty - th + 12 * s;
           if (this.attacking && this.currentPunch) {
             const p = this.currentPunch;
-            if (p.armStyle === 'hook') {
-              fex = f * (16 + p.reach * ext * 0.6) + lx;
-              fey = -30 + bob - ext * 4 + ly;
-            } else if (p.armStyle === 'uppercut') {
-              fex = f * (16 + p.reach * ext * 0.5) + lx;
-              fey = -33 + bob - ext * 12 + ly;
-            } else {
-              fex = f * (16 + p.reach * ext) + lx;
-              fey = -33 + bob + ly;
-            }
+            const ext = this.punchArmExt;
+            feX = tx + f * (18 * s + p.reach * ext);
+            feY = ty - th + 12 * s + p.leanY * 5 * s - (p.armStyle === 'uppercut' ? ext * 20 * s : 0);
           }
-          if (this.blocking) { fex = f * 8 + lean; fey = -36 + bob; }
-          if (this.isStunned) {
-            fex += Math.sin(now * 0.02) * 4;
-            fey += Math.cos(now * 0.015) * 3;
-          }
-          drawArm(shoulderFrontX, shoulderY, fex, fey, 4.5, 7, false);
+          if (this.blocking) { feX = tx + f * 10 * s; feY = ty - th - 5 * s; }
+          if (this.isStunned) { feX += Math.sin(now * 0.02) * 6; feY += Math.cos(now * 0.015) * 4; }
+          drawHighFidArm(sRX, sY, feX, feY, ARM_T, false);
         }
 
-        // ── Head ──
-        const headOff = this.headSnapBack;
-        const hx = lx + headOff;
-        const hy = -46 + bob + ly;
+        // ── Head (Detailed) ──
+        const hRad = 10 * this.headSize * s;
+        const hX = lx + this.headSnapBack * s;
+        const hY = ty - th - hRad - 2 * s;
 
         // Neck
-        ctx.strokeStyle = sk; ctx.lineWidth = 5;
-        ctx.beginPath(); ctx.moveTo(lx, -33 + bob + ly); ctx.lineTo(hx, hy + 8); ctx.stroke();
+        ctx.strokeStyle = sk; ctx.lineWidth = 6 * s;
+        ctx.beginPath(); ctx.moveTo(lx, ty - th + 2 * s); ctx.lineTo(hX, hY + 5 * s); ctx.stroke();
 
-        // Head base (slightly oval)
-        ctx.fillStyle = sk;
-        ctx.beginPath(); ctx.ellipse(hx, hy, 9, 10.5, 0, 0, Math.PI * 2); ctx.fill();
-
-        // Jaw definition
-        ctx.fillStyle = skShd; ctx.globalAlpha = 0.2;
-        ctx.beginPath();
-        ctx.ellipse(hx, hy + 4, 7.5, 5, 0, 0, Math.PI); ctx.fill();
-        ctx.globalAlpha = 1;
-
-        // Hair (cropped / fade style)
-        ctx.fillStyle = hairC;
-        ctx.beginPath();
-        ctx.ellipse(hx, hy - 3, 9.5, 8, 0, Math.PI, Math.PI * 2); ctx.fill();
-        // Hair fade line
-        ctx.strokeStyle = hairC; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.4;
-        ctx.beginPath();
-        ctx.arc(hx, hy, 9.5, Math.PI + 0.3, Math.PI * 2 - 0.3); ctx.stroke();
-        ctx.globalAlpha = 1;
-
-        // Ear (on far side)
-        ctx.fillStyle = sk;
-        ctx.beginPath(); ctx.ellipse(hx - f * 9, hy, 2.5, 3.5, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = skShd; ctx.lineWidth = 0.5;
-        ctx.beginPath(); ctx.arc(hx - f * 9, hy, 1.5, 0, Math.PI); ctx.stroke();
+        // Head Gradient
+        const headGrd = ctx.createRadialGradient(hX + f * 4 * s, hY - 4 * s, 0, hX, hY, hRad);
+        headGrd.addColorStop(0, sk); headGrd.addColorStop(1, skShd);
+        ctx.fillStyle = headGrd;
+        ctx.beginPath(); ctx.ellipse(hX, hY, hRad, hRad * 1.1, 0, 0, Math.PI * 2); ctx.fill();
 
         if (!flash) {
-          // Eyebrow
-          ctx.strokeStyle = hairC; ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(hx + f * 2, hy - 5);
-          ctx.lineTo(hx + f * 7, hy - 5.5 + (this.isStunned ? 2 : 0));
-          ctx.stroke();
-
-          // Eye
-          if (!this.isStunned) {
-            // Eye white
-            ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.ellipse(hx + f * 5, hy - 2, 2.5, 2, 0, 0, Math.PI * 2); ctx.fill();
-            // Pupil
-            ctx.fillStyle = '#111';
-            ctx.beginPath(); ctx.arc(hx + f * 5.5, hy - 1.5, 1.2, 0, Math.PI * 2); ctx.fill();
-          } else {
-            // Stunned X eye
-            ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
-            const ex0 = hx + f * 5, ey0 = hy - 2;
-            ctx.beginPath(); ctx.moveTo(ex0 - 2, ey0 - 2); ctx.lineTo(ex0 + 2, ey0 + 2); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(ex0 + 2, ey0 - 2); ctx.lineTo(ex0 - 2, ey0 + 2); ctx.stroke();
+          // Hair
+          ctx.fillStyle = hairC;
+          if (this.hairStyle === 'mohawk') {
+            for (let i = -4; i <= 4; i++) {
+              ctx.beginPath(); ctx.moveTo(hX + i * 2 * s, hY - hRad + 2 * s);
+              ctx.lineTo(hX + i * 1.5 * s, hY - hRad - 8 * s);
+              ctx.lineTo(hX + i * 2 * s + 2 * s, hY - hRad + 2 * s); ctx.fill();
+            }
+          } else if (this.hairStyle === 'short') {
+            ctx.beginPath(); ctx.arc(hX, hY - 2 * s, hRad + 1, Math.PI, 0); ctx.fill();
+          } else if (this.hairStyle === 'bald') {
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.beginPath(); ctx.arc(hX - 3 * s, hY - 5 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
           }
 
-          // Nose
-          ctx.strokeStyle = skShd; ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(hx + f * 6, hy - 1);
-          ctx.lineTo(hx + f * 7.5, hy + 1.5);
-          ctx.lineTo(hx + f * 5.5, hy + 2);
-          ctx.stroke();
-
-          // Mouth
-          ctx.strokeStyle = '#a06040'; ctx.lineWidth = 1;
-          if (this.hp / this.maxHp < 0.3) {
-            // Grimace when hurt
-            ctx.beginPath();
-            ctx.arc(hx + f * 3, hy + 5, 3, 0.2, Math.PI - 0.2); ctx.stroke();
+          // Eyes
+          ctx.fillStyle = '#fff';
+          const eyeOff = f * 5 * s;
+          if (this.isStunned) {
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(hX + eyeOff - 3, hY - 2 - 3); ctx.lineTo(hX + eyeOff + 3, hY - 2 + 3); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(hX + eyeOff + 3, hY - 2 - 3); ctx.lineTo(hX + eyeOff - 3, hY - 2 + 3); ctx.stroke();
           } else {
-            // Neutral/slight grin
-            ctx.beginPath();
-            ctx.moveTo(hx + f * 2, hy + 4.5);
-            ctx.lineTo(hx + f * 6, hy + 4);
-            ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(hX + eyeOff, hY - 1 * s, 3 * s, 2.5 * s, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(hX + eyeOff + f * 1 * s, hY - 0.5 * s, 1.2 * s, 0, Math.PI * 2); ctx.fill();
           }
+
+          // Nose & Mouth
+          ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(hX + f * 7 * s, hY - 1 * s); ctx.lineTo(hX + f * 9 * s, hY + 1 * s); ctx.lineTo(hX + f * 7 * s, hY + 2 * s); ctx.stroke();
+
+          ctx.beginPath();
+          if (this.hp / this.maxHp < 0.3) ctx.arc(hX + f * 4 * s, hY + 6 * s, 3 * s, 0.3, Math.PI - 0.3);
+          else { ctx.moveTo(hX + f * 3 * s, hY + 5 * s); ctx.lineTo(hX + f * 7 * s, hY + 4 * s); }
+          ctx.stroke();
         }
 
         // ── Sweat drops when stamina low ──
@@ -1007,9 +956,9 @@
           ctx.fillStyle = '#88ccff'; ctx.globalAlpha = 0.6;
           const swPhase = now * 0.003 + this.bobPhase;
           for (let si = 0; si < 2; si++) {
-            const sdx = Math.sin(swPhase + si * 3) * 8;
+            const sdx = Math.sin(swPhase + si * 3) * 8 * s;
             const sdy = (now * 0.04 + si * 20) % 30 - 15;
-            ctx.beginPath(); ctx.arc(hx + sdx, hy - 5 + sdy, 1.2, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(hX + sdx, hY - 5 * s + sdy, 1.2 * s, 0, Math.PI * 2); ctx.fill();
           }
           ctx.globalAlpha = 1;
         }
@@ -1303,78 +1252,95 @@
 
     // ── Drawing ──
     function drawRing(ctx) {
-      // Floor
-      ctx.fillStyle = C.floor;
-      ctx.fillRect(RING.x - 10, RING.y + RING.h - 8, RING.w + 20, 50);
-      ctx.strokeStyle = C.floorLine; ctx.lineWidth = 1;
-      for (let i = 0; i < 12; i++) {
-        const lx = RING.x + i * (RING.w / 11);
-        ctx.beginPath(); ctx.moveTo(lx, RING.y + RING.h - 8); ctx.lineTo(lx + (i < 6 ? -15 : 15), RING.y + RING.h + 40); ctx.stroke();
-      }
+      const now = performance.now();
+      // Floor (Reflective wood/composite)
+      const floorGrd = ctx.createLinearGradient(0, RING.y + RING.h, 0, H);
+      floorGrd.addColorStop(0, '#1c1425'); floorGrd.addColorStop(1, '#0a0812');
+      ctx.fillStyle = floorGrd;
+      ctx.fillRect(0, RING.y + RING.h - 10, W, H - (RING.y + RING.h) + 20);
 
-      // Ring mat with subtle texture
-      ctx.fillStyle = C.ring;
-      ctx.fillRect(RING.x, RING.y, RING.w, RING.h);
-      // Texture dots
-      ctx.fillStyle = '#352040';
-      for (let tx = RING.x + 10; tx < RING.x + RING.w; tx += 20) {
-        for (let ty = RING.y + 10; ty < RING.y + RING.h; ty += 20) {
-          if (Math.sin(tx * ty * 0.1) > 0.5) ctx.fillRect(tx, ty, 2, 2);
-        }
-      }
-
-      // Center logo (pixel "K.O.")
-      ctx.fillStyle = '#3a2248'; ctx.font = '14px "Press Start 2P"'; ctx.textAlign = 'center';
+      // Dynamic floor reflections (subtle)
       ctx.globalAlpha = 0.15;
-      ctx.fillText('K.O.', RING_CENTER_X, RING.y + RING.h / 2 + 5);
+      [player, enemy].forEach(b => {
+        const rx = b.x, ry = RING.y + RING.h + (b.groundY - (RING.y + RING.h)) * 0.5;
+        const rGrd = ctx.createRadialGradient(rx, ry, 0, rx, ry, 40);
+        rGrd.addColorStop(0, b.colors.main); rGrd.addColorStop(1, 'transparent');
+        ctx.fillStyle = rGrd; ctx.beginPath(); ctx.ellipse(rx, ry, 30, 10, 0, 0, Math.PI * 2); ctx.fill();
+      });
       ctx.globalAlpha = 1;
 
-      // Center line
-      ctx.strokeStyle = '#4a3050'; ctx.lineWidth = 2;
-      ctx.setLineDash([6, 6]);
-      ctx.beginPath(); ctx.moveTo(RING_CENTER_X, RING.y + 10); ctx.lineTo(RING_CENTER_X, RING.y + RING.h - 10); ctx.stroke();
-      ctx.setLineDash([]);
+      // Ring mat (High-end canvas texture)
+      const matGrd = ctx.createLinearGradient(0, RING.y, 0, RING.y + RING.h);
+      matGrd.addColorStop(0, '#2e1b3d'); matGrd.addColorStop(0.5, '#3a2248'); matGrd.addColorStop(1, '#2a1a35');
+      ctx.fillStyle = matGrd;
+      ctx.fillRect(RING.x, RING.y, RING.w, RING.h);
 
-      // Posts
-      const posts = [[RING.x, RING.y], [RING.x + RING.w, RING.y], [RING.x, RING.y + RING.h], [RING.x + RING.w, RING.y + RING.h]];
-      for (const [px, py] of posts) {
-        ctx.fillStyle = C.post; ctx.fillRect(px - 5, py - 8, 10, 16);
-        ctx.fillStyle = '#aa8844'; ctx.fillRect(px - 4, py - 6, 8, 4);
+      // Fine mat texture (woven look)
+      ctx.strokeStyle = 'rgba(255,255,255,0.02)'; ctx.lineWidth = 1;
+      for (let tx = RING.x; tx < RING.x + RING.w; tx += 4) {
+        ctx.beginPath(); ctx.moveTo(tx, RING.y); ctx.lineTo(tx, RING.y + RING.h); ctx.stroke();
       }
 
-      // Ropes with elastic deformation + vibration
+      // Center logo (Modern "KO" typography)
+      ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.font = '900 80px "Outfit"'; ctx.textAlign = 'center';
+      ctx.fillText('KO', RING_CENTER_X, RING.y + RING.h / 2 + 30);
+
+      // Boundary lines
+      ctx.strokeStyle = 'rgba(255,215,0,0.1)'; ctx.lineWidth = 3;
+      ctx.strokeRect(RING.x + 5, RING.y + 5, RING.w - 10, RING.h - 10);
+
+      // Posts (Metallic look)
+      const posts = [[RING.x, RING.y], [RING.x + RING.w, RING.y], [RING.x, RING.y + RING.h], [RING.x + RING.w, RING.y + RING.h]];
+      posts.forEach(([px, py], i) => {
+        const pGrd = ctx.createLinearGradient(px - 8, py, px + 8, py);
+        const pc = i < 2 ? '#333' : '#c8a860'; // Front posts gold, back dark
+        pGrd.addColorStop(0, '#111'); pGrd.addColorStop(0.5, pc); pGrd.addColorStop(1, '#111');
+        ctx.fillStyle = pGrd;
+        ctx.beginPath();
+        const rrx = px - 6, rry = py - 12, rrw = 12, rrh = 24, rad = 4;
+        ctx.moveTo(rrx + rad, rry);
+        ctx.lineTo(rrx + rrw - rad, rry); ctx.quadraticCurveTo(rrx + rrw, rry, rrx + rrw, rry + rad);
+        ctx.lineTo(rrx + rrw, rry + rrh - rad); ctx.quadraticCurveTo(rrx + rrw, rry + rrh, rrx + rrw - rad, rry + rrh);
+        ctx.lineTo(rrx + rad, rry + rrh); ctx.quadraticCurveTo(rrx, rry + rrh, rrx, rry + rrh - rad);
+        ctx.lineTo(rrx, rry + rad); ctx.quadraticCurveTo(rrx, rry, rrx + rad, rry);
+        ctx.fill();
+      });
+
+      // Ropes (Premium braided Look)
       ropeVibrationL *= 0.92; ropeVibrationR *= 0.92;
       for (let r = 0; r < 3; r++) {
         const ry = RING.y + 15 + r * 28;
         let lbx = 0, lby = 0, rbx = 0, rby = 0;
-        const RZ = 35;
+        const RZ = 40;
         [player, enemy].forEach(b => {
-          if (!b) return;
-          const ld = b.x - RING.x;
-          if (ld < RZ) { const t = Math.max(0, 1 - ld / RZ); lbx = Math.min(lbx, -t * 18); lby = Math.max(lby, t * 4); }
-          const rd = (RING.x + RING.w) - b.x;
-          if (rd < RZ) { const t = Math.max(0, 1 - rd / RZ); rbx = Math.max(rbx, t * 18); rby = Math.max(rby, t * 4); }
+          const ld = b.x - RING.x; if (ld < RZ) { const t = Math.max(0, 1 - ld / RZ); lbx = Math.min(lbx, -t * 22); lby = Math.max(lby, t * 5); }
+          const rd = (RING.x + RING.w) - b.x; if (rd < RZ) { const t = Math.max(0, 1 - rd / RZ); rbx = Math.max(rbx, t * 22); rby = Math.max(rby, t * 5); }
         });
-        // Add vibration
-        const vibL = Math.sin(performance.now() * 0.03 + r) * ropeVibrationL;
-        const vibR = Math.sin(performance.now() * 0.03 + r + 1) * ropeVibrationR;
+        const vibL = Math.sin(now * 0.03 + r) * ropeVibrationL;
+        const vibR = Math.sin(now * 0.03 + r + 1) * ropeVibrationR;
 
-        // Shadow
-        ctx.strokeStyle = C.ropeShadow; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.moveTo(RING.x + lbx, ry + 2 + lby + vibL);
-        ctx.quadraticCurveTo(RING.x + RING.w / 2, ry + 2, RING.x + RING.w + rbx, ry + 2 + rby + vibR); ctx.stroke();
-        // Main
-        ctx.strokeStyle = C.ropes; ctx.lineWidth = 3;
+        // Rope Glow
+        ctx.shadowColor = C.gold; ctx.shadowBlur = 4;
+        ctx.strokeStyle = `rgba(200,160,80, ${0.4 + r * 0.2})`; ctx.lineWidth = 4;
         ctx.beginPath(); ctx.moveTo(RING.x + lbx, ry + lby + vibL);
-        ctx.quadraticCurveTo(RING.x + RING.w / 2, ry, RING.x + RING.w + rbx, ry + rby + vibR); ctx.stroke();
+        ctx.quadraticCurveTo(RING.x + RING.w / 2, ry - 2, RING.x + RING.w + rbx, ry + rby + vibR); ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Braiding detail
+        ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(RING.x + lbx, ry + lby + vibL);
+        ctx.quadraticCurveTo(RING.x + RING.w / 2, ry - 2, RING.x + RING.w + rbx, ry + rby + vibR); ctx.stroke();
+        ctx.setLineDash([]);
       }
 
-      // Spotlight glow
-      const grd = ctx.createRadialGradient(RING_CENTER_X, RING.y - 20, 10, RING_CENTER_X, RING.y + RING.h / 2, 300);
-      grd.addColorStop(0, 'rgba(255,240,200,0.06)');
-      grd.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grd;
-      ctx.fillRect(RING.x - 20, RING.y - 40, RING.w + 40, RING.h + 60);
+      // Volumetric Spotlight Beam
+      const spotX = RING_CENTER_X + Math.sin(now * 0.0005) * 100;
+      const spotGrd = ctx.createRadialGradient(spotX, RING.y - 100, 50, spotX, RING.y + 100, 400);
+      spotGrd.addColorStop(0, 'rgba(255,245,220,0.15)');
+      spotGrd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = spotGrd;
+      ctx.beginPath(); ctx.moveTo(spotX - 40, -50); ctx.lineTo(RING.x - 100, RING.y + RING.h + 100);
+      ctx.lineTo(RING.x + RING.w + 100, RING.y + RING.h + 100); ctx.lineTo(spotX + 40, -50); ctx.fill();
     }
 
     // ── Crowd Excitement System ──
@@ -1421,308 +1387,111 @@
       const now = performance.now();
       const dt_crowd = Math.min(0.05, (now - lastCrowdUpdate) / 1000);
       lastCrowdUpdate = now;
-
-      // Update excitement (smooth lerp toward target, slow decay)
       crowdExcitement += (crowdExcitementTarget - crowdExcitement) * 0.05;
       crowdExcitementTarget = Math.max(0, crowdExcitementTarget - 0.003);
-
-      // Fight-state reactive excitement
       if (player && enemy) {
         const lowestHp = Math.min(player.hp / player.maxHp, enemy.hp / enemy.maxHp);
         if (lowestHp < 0.2) crowdExcitementTarget = Math.max(crowdExcitementTarget, 0.6);
         if (gameState === 'KO') crowdExcitementTarget = 1;
       }
-
       const exc = crowdExcitement;
 
-      // ── Audience noise visualization bars at top ──
-      if (exc > 0.1) {
-        ctx.globalAlpha = exc * 0.15;
-        const barCount = 30;
-        for (let i = 0; i < barCount; i++) {
-          const bx = (W / barCount) * i;
-          const bh = Math.abs(Math.sin(now * 0.004 + i * 0.7)) * exc * 20 + 2;
-          ctx.fillStyle = exc > 0.7 ? '#ff4444' : exc > 0.4 ? '#ffaa44' : '#44aaff';
-          ctx.fillRect(bx, 0, W / barCount - 1, bh);
-        }
-        ctx.globalAlpha = 1;
-      }
+      // ── Background Atmosphere (Distant crowd silhouettes) ──
+      ctx.fillStyle = '#0a0812'; ctx.fillRect(0, 50, W, 120);
 
-      // ── Back row (3rd row — farthest, darkest) ──
-      ctx.fillStyle = '#050310';
-      ctx.fillRect(0, 68, W, 25);
-      const farBackHeads = [30, 65, 100, 135, 170, 205, 240, 280, 320, 355, 390, 425, 460, 500, 540, 575, 610];
-      for (let i = 0; i < farBackHeads.length; i++) {
-        const hx = farBackHeads[i];
-        const waveBob = crowdWavePhase >= 0 ? Math.max(0, Math.sin((crowdWavePhase - hx / W * 4) * Math.PI)) * 6 : 0;
-        const excBob = Math.sin(now * 0.003 + i * 1.3) * exc * 3;
-        const hy = 82 + Math.sin(hx * 0.4 + now * 0.0008) * 1 - waveBob - excBob;
-        ctx.fillStyle = '#0a0616';
-        ctx.beginPath(); ctx.arc(hx, hy, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.fillRect(hx - 5, hy + 4, 10, 8);
-      }
+      const drawLayer = (count, yBase, color, scale, speed) => {
+        ctx.fillStyle = color;
+        for (let i = 0; i < count; i++) {
+          const hx = (W / count) * i + Math.sin(now * 0.0002 * speed + i) * 10;
+          const waveBob = crowdWavePhase >= 0 ? Math.max(0, Math.sin((crowdWavePhase - hx / W * 4) * Math.PI)) * 12 * scale : 0;
+          const jump = (exc > 0.6 && Math.sin(now * 0.01 + i) > 0.8) ? exc * 10 * scale : 0;
+          const hy = yBase - waveBob - jump + Math.sin(now * 0.002 + i) * 2;
 
-      // ── Middle row (2nd row) ──
-      ctx.fillStyle = '#080412';
-      ctx.fillRect(0, 88, W, 38);
-      const backHeads = [40, 85, 130, 175, 220, 270, 320, 365, 410, 455, 500, 545, 590, 630];
-      const backColors = ['#0e0820', '#100a22', '#0c0719', '#110b24', '#0d0818'];
-      for (let i = 0; i < backHeads.length; i++) {
-        const hx = backHeads[i];
-        const waveBob = crowdWavePhase >= 0 ? Math.max(0, Math.sin((crowdWavePhase - hx / W * 4) * Math.PI)) * 10 : 0;
-        const excJump = exc > 0.7 && Math.sin(now * 0.006 + i * 2) > 0.5 ? 5 : 0;
-        const excBob = Math.sin(now * 0.004 + i * 1.7) * exc * 4;
-        const hy = 115 + Math.sin(hx * 0.3 + now * 0.001) * 2 - waveBob - excJump - excBob;
-        ctx.fillStyle = backColors[i % backColors.length];
-        ctx.beginPath(); ctx.arc(hx, hy, 8, 0, Math.PI * 2); ctx.fill();
-        ctx.fillRect(hx - 6, hy + 5, 12, 10);
-
-        // Arms raised when excited
-        if (exc > 0.3 && (i + Math.floor(now / 600)) % 3 === 0) {
-          ctx.strokeStyle = backColors[i % backColors.length]; ctx.lineWidth = 2;
-          const armOff = Math.sin(now * 0.007 + i) * 6;
-          ctx.beginPath(); ctx.moveTo(hx - 5, hy + 3); ctx.lineTo(hx - 10, hy - 8 + armOff); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(hx + 5, hy + 3); ctx.lineTo(hx + 10, hy - 8 - armOff); ctx.stroke();
-        }
-
-        // Phone flashlights (some spectators hold up phones)
-        if (exc > 0.5 && i % 4 === Math.floor(now / 2000) % 4) {
-          ctx.fillStyle = `rgba(200,220,255,${0.3 + Math.sin(now * 0.01 + i) * 0.2})`;
-          ctx.fillRect(hx - 1, hy - 12, 3, 5);
-          // Screen glow
-          ctx.fillStyle = `rgba(180,200,255,${0.1 * exc})`;
-          ctx.beginPath(); ctx.arc(hx, hy - 12, 8, 0, Math.PI * 2); ctx.fill();
-        }
-      }
-
-      // ── Front row (closest, most detail) ──
-      ctx.fillStyle = '#0d0818';
-      ctx.fillRect(0, 120, W, 55);
-      const frontHeads = [60, 100, 145, 190, 230, 280, 330, 370, 420, 460, 510, 550, 590];
-      const crowdColors = ['#1a0f28', '#1e1230', '#16102a', '#201438', '#1a1028'];
-      const shirtColors = ['#2a1535', '#221040', '#2d1838', '#1e1530', '#261242'];
-      for (let i = 0; i < frontHeads.length; i++) {
-        const hx = frontHeads[i];
-        const waveBob = crowdWavePhase >= 0 ? Math.max(0, Math.sin((crowdWavePhase - hx / W * 4) * Math.PI)) * 14 : 0;
-        const excJump = exc > 0.5 && Math.sin(now * 0.008 + i * 1.5) > 0.3 ? exc * 8 : 0;
-        const excBob = Math.sin(now * 0.005 + i * 2.1) * exc * 5;
-        const hy = 148 + Math.sin(hx * 0.5 + now * 0.002) * 3 - waveBob - excJump - excBob;
-
-        // Body/shirt
-        ctx.fillStyle = shirtColors[i % shirtColors.length];
-        ctx.fillRect(hx - 8, hy + 6, 16, 18);
-
-        // Head
-        ctx.fillStyle = crowdColors[i % crowdColors.length];
-        ctx.beginPath(); ctx.arc(hx, hy, 10, 0, Math.PI * 2); ctx.fill();
-
-        // Facial feature dot (mouth opening when excited)
-        if (exc > 0.4) {
-          ctx.fillStyle = '#0a0510';
-          ctx.beginPath(); ctx.arc(hx, hy + 3, 1.5 + exc * 2, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // Waving arms — more arms wave when more excited
-        const armWaveChance = exc > 0.6 ? 0.7 : exc > 0.3 ? 0.4 : (i % 3 === Math.floor(now / 800) % 3 ? 1 : 0);
-        if (Math.sin(now * 0.001 + i * 3) > (1 - armWaveChance)) {
-          ctx.strokeStyle = crowdColors[i % crowdColors.length]; ctx.lineWidth = 2.5;
-          const la = Math.sin(now * 0.008 + i) * (0.3 + exc * 0.5);
-          const ra = Math.sin(now * 0.009 + i + 2) * (0.3 + exc * 0.5);
-          // Left arm
           ctx.beginPath();
-          ctx.moveTo(hx - 8, hy + 6);
-          ctx.lineTo(hx - 16, hy - 8 + la * 20);
-          ctx.stroke();
-          // Right arm
-          ctx.beginPath();
-          ctx.moveTo(hx + 8, hy + 6);
-          ctx.lineTo(hx + 16, hy - 8 + ra * 20);
-          ctx.stroke();
+          ctx.ellipse(hx, hy, 6 * scale, 7 * scale, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillRect(hx - 5 * scale, hy + 2 * scale, 10 * scale, 20 * scale);
         }
+      };
 
-        // Held-up signs (some spectators at high excitement)
-        if (exc > 0.65 && i % 5 === 2) {
-          ctx.save();
-          const signBob = Math.sin(now * 0.004 + i) * 3;
-          const signY = hy - 22 + signBob;
-          // Sign background
-          ctx.fillStyle = ['#ffffff', '#ffdd44', '#ff4444', '#44ff44'][i % 4];
-          ctx.fillRect(hx - 14, signY - 8, 28, 12);
-          // Sign text
-          ctx.fillStyle = '#000'; ctx.font = '4px "Press Start 2P"'; ctx.textAlign = 'center';
-          const signTexts = ['KO!', 'GO!!', 'WOW', 'FIGHT', 'HIT!', 'YES!', 'BOOM', 'NICE'];
-          ctx.fillText(signTexts[(i + Math.floor(now / 3000)) % signTexts.length], hx, signY);
-          // Sign stick
-          ctx.strokeStyle = '#888'; ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.moveTo(hx, signY + 4); ctx.lineTo(hx, hy - 2); ctx.stroke();
-          ctx.restore();
-        }
+      drawLayer(20, 80, 'rgba(10, 8, 20, 1)', 0.7, 1);  // Farthest
+      drawLayer(15, 110, 'rgba(15, 12, 25, 1)', 0.85, 1.5); // Mid
+      drawLayer(12, 145, 'rgba(20, 15, 35, 1)', 1.0, 2);  // Front
 
-        // Phone flashlights (front row)
-        if (exc > 0.4 && (i + 2) % 5 === Math.floor(now / 1500) % 5) {
-          const phoneY = hy - 14;
-          ctx.fillStyle = '#445'; ctx.fillRect(hx + 6, phoneY, 4, 7); // phone body
-          ctx.fillStyle = `rgba(180,200,255,${0.5 + Math.sin(now * 0.008 + i * 2) * 0.3})`;
-          ctx.fillRect(hx + 6, phoneY, 4, 7); // screen glow
-          // Light beam
-          ctx.fillStyle = `rgba(200,220,255,${0.05 * exc})`;
-          ctx.beginPath();
-          ctx.moveTo(hx + 8, phoneY);
-          ctx.lineTo(hx + 2, phoneY - 20);
-          ctx.lineTo(hx + 14, phoneY - 20);
-          ctx.closePath(); ctx.fill();
-        }
-      }
-
-      // ── Camera flashes (more frequent when more exciting) ──
-      const flashChance = 0.003 + exc * 0.04;
-      const flashCount = cameraFlashTimer > 0 ? 3 : (Math.random() < flashChance ? 1 : 0);
-      for (let fi = 0; fi < flashCount; fi++) {
-        const allHeads = [...frontHeads, ...backHeads];
-        const fx = allHeads[Math.floor(Math.random() * allHeads.length)];
-        const fy = 110 + Math.random() * 50;
-        // Bright flash
-        ctx.fillStyle = 'rgba(255,255,255,0.8)';
-        ctx.beginPath(); ctx.arc(fx, fy, 3, 0, Math.PI * 2); ctx.fill();
-        // Glow
-        ctx.fillStyle = 'rgba(255,255,200,0.2)';
-        ctx.beginPath(); ctx.arc(fx, fy, 15, 0, Math.PI * 2); ctx.fill();
-        // Lens flare streak
-        ctx.strokeStyle = 'rgba(255,255,200,0.15)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(fx - 20, fy); ctx.lineTo(fx + 20, fy); ctx.stroke();
-      }
-
-      // ── Crowd wave animation ──
-      if (crowdWavePhase >= 0) {
-        crowdWavePhase += dt_crowd * 2;
-        if (crowdWavePhase > 6) crowdWavePhase = -1; // wave complete
-      }
-      // Trigger wave at high excitement randomly
-      if (exc > 0.6 && crowdWavePhase < 0 && Math.random() < 0.001) {
-        triggerCrowdWave();
-      }
-
-      // ── Thrown items ──
-      // Spawn thrown items on big moments
-      if (exc > 0.8 && Math.random() < 0.005) {
-        spawnThrownItem(frontHeads[Math.floor(Math.random() * frontHeads.length)]);
-      }
-      // Update and draw thrown items
-      for (let i = crowdThrownItems.length - 1; i >= 0; i--) {
-        const item = crowdThrownItems[i];
-        item.x += item.vx; item.y += item.vy; item.vy += 0.15;
-        item.rot += item.rotV; item.life -= dt_crowd;
-        if (item.life <= 0 || item.y > H) { crowdThrownItems.splice(i, 1); continue; }
-        ctx.save();
-        ctx.translate(item.x, item.y);
-        ctx.rotate(item.rot);
-        ctx.globalAlpha = Math.min(1, item.life);
-        ctx.font = '8px serif'; ctx.textAlign = 'center';
-        ctx.fillText(item.text, 0, 0);
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
-
-      // ── Confetti ──
-      if (gameState === 'KO' && crowdConfetti.length < 50) {
-        spawnConfetti(3);
-      }
-      for (let i = crowdConfetti.length - 1; i >= 0; i--) {
-        const c = crowdConfetti[i];
-        c.x += c.vx + Math.sin(now * 0.003 + i) * 0.5;
-        c.y += c.vy;
-        c.rot += c.rotV;
-        c.life -= dt_crowd;
-        if (c.life <= 0 || c.y > H) { crowdConfetti.splice(i, 1); continue; }
-        ctx.save();
-        ctx.translate(c.x, c.y);
-        ctx.rotate(c.rot);
-        ctx.globalAlpha = Math.min(1, c.life * 0.5);
-        ctx.fillStyle = c.color;
-        ctx.fillRect(-c.size / 2, -c.size / 4, c.size, c.size / 2);
-        ctx.globalAlpha = 1;
-        ctx.restore();
-      }
-      // Clear confetti when game resets
-      if (gameState === 'FIGHTING' && crowdConfetti.length > 0 && crowdConfetti.length < 5) {
-        crowdConfetti = [];
-      }
-
-      // ── Spotlight sweeps at high excitement ──
-      if (exc > 0.5) {
-        ctx.globalAlpha = exc * 0.04;
-        const spotX1 = W * 0.3 + Math.sin(now * 0.001) * W * 0.2;
-        const spotX2 = W * 0.7 + Math.cos(now * 0.0013) * W * 0.2;
-        const spotGrd1 = ctx.createRadialGradient(spotX1, 60, 5, spotX1, 60, 120);
-        spotGrd1.addColorStop(0, 'rgba(255,200,100,1)');
-        spotGrd1.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = spotGrd1;
-        ctx.fillRect(spotX1 - 120, 0, 240, 175);
-        const spotGrd2 = ctx.createRadialGradient(spotX2, 60, 5, spotX2, 60, 120);
-        spotGrd2.addColorStop(0, 'rgba(100,100,255,1)');
-        spotGrd2.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = spotGrd2;
-        ctx.fillRect(spotX2 - 120, 0, 240, 175);
-        ctx.globalAlpha = 1;
-      }
-
-      // ── Crowd stomp/clap rhythm lines ──
-      if (exc > 0.4) {
-        const rhythm = Math.sin(now * 0.01) > 0.7;
-        if (rhythm) {
-          ctx.globalAlpha = exc * 0.08;
-          ctx.fillStyle = '#fff';
-          ctx.fillRect(0, 170, W, 2);
-          ctx.globalAlpha = 1;
-        }
+      // ── Dynamic Lens Flashes ──
+      if (Math.random() < 0.005 + exc * 0.03) {
+        const fx = Math.random() * W, fy = 60 + Math.random() * 80;
+        const flareGrd = ctx.createRadialGradient(fx, fy, 0, fx, fy, 40);
+        flareGrd.addColorStop(0, 'rgba(255,255,255,0.8)'); flareGrd.addColorStop(0.2, 'rgba(200,220,255,0.3)'); flareGrd.addColorStop(1, 'transparent');
+        ctx.fillStyle = flareGrd; ctx.beginPath(); ctx.arc(fx, fy, 40, 0, Math.PI * 2); ctx.fill();
       }
     }
 
     function drawHUD(ctx) {
-      const barW = 180, barH = 14, margin = 20;
+      const barW = 240, barH = 12, margin = 30;
       const leftBoxer = (isOnlineMode && !PM.isHost) ? enemy : player;
       const rightBoxer = (isOnlineMode && !PM.isHost) ? player : enemy;
 
-      drawBar(ctx, margin, 20, barW, barH, leftBoxer.hp, leftBoxer.maxHp, hpColor(leftBoxer.hp, leftBoxer.maxHp), 'left');
-      drawBar(ctx, margin, 38, barW * 0.6, 8, leftBoxer.stamina, leftBoxer.maxStamina, C.stamina, 'left');
-      drawName(ctx, margin, 56, leftBoxer.name, (leftBoxer === player ? C.p1 : C.p2), 'left');
+      // Glassmorphism HUD Backgrounds
+      const drawGlassPanel = (x, y, w, h, align) => {
+        ctx.save();
+        ctx.translate(align === 'right' ? x - w : x, y);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'; ctx.lineWidth = 1;
+        ctx.beginPath();
+        const rad = 8;
+        ctx.moveTo(rad, 0); ctx.lineTo(w - rad, 0); ctx.quadraticCurveTo(w, 0, w, rad);
+        ctx.lineTo(w, h - rad); ctx.quadraticCurveTo(w, h, w - rad, h);
+        ctx.lineTo(rad, h); ctx.quadraticCurveTo(0, h, 0, h - rad);
+        ctx.lineTo(0, rad); ctx.quadraticCurveTo(0, 0, rad, 0);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      };
+
+      drawGlassPanel(margin - 10, 15, barW + 20, 75, 'left');
+      drawGlassPanel(W - margin + 10, 15, barW + 20, 75, 'right');
+
+      drawBar(ctx, margin, 35, barW, barH, leftBoxer.hp, leftBoxer.maxHp, hpColor(leftBoxer.hp, leftBoxer.maxHp), 'left');
+      drawBar(ctx, margin, 52, barW * 0.7, 5, leftBoxer.stamina, leftBoxer.maxStamina, C.gold, 'left');
+      drawName(ctx, margin, 75, leftBoxer.name, (leftBoxer === player ? C.p1 : C.p2), 'left');
 
       const p2x = W - margin;
-      drawBar(ctx, p2x, 20, barW, barH, rightBoxer.hp, rightBoxer.maxHp, hpColor(rightBoxer.hp, rightBoxer.maxHp), 'right');
-      drawBar(ctx, p2x, 38, barW * 0.6, 8, rightBoxer.stamina, rightBoxer.maxStamina, C.stamina, 'right');
-      drawName(ctx, p2x, 56, rightBoxer.name, (rightBoxer === player ? C.p1 : C.p2), 'right');
+      drawBar(ctx, p2x, 35, barW, barH, rightBoxer.hp, rightBoxer.maxHp, hpColor(rightBoxer.hp, rightBoxer.maxHp), 'right');
+      drawBar(ctx, p2x, 52, barW * 0.7, 5, rightBoxer.stamina, rightBoxer.maxStamina, C.gold, 'right');
+      drawName(ctx, p2x, 75, rightBoxer.name, (rightBoxer === player ? C.p1 : C.p2), 'right');
 
-      ctx.fillStyle = C.gold; ctx.font = '10px "Press Start 2P"'; ctx.textAlign = 'center';
-      ctx.fillText('ROUND ' + roundNumber, W / 2, 20);
-      ctx.font = '20px "Press Start 2P"';
-      ctx.fillText(Math.ceil(roundTimer).toString(), W / 2, 46);
-
-      ctx.font = '8px "Press Start 2P"';
-      ctx.fillStyle = C.p1; ctx.textAlign = 'left'; ctx.fillText(player.score.toString(), margin, 76);
-      ctx.fillStyle = C.p2; ctx.textAlign = 'right'; ctx.fillText(enemy.score.toString(), W - margin, 76);
-
-      // Combo counter
-      if (comboCount >= 2 && comboTimer > 0) {
-        ctx.textAlign = 'center';
-        ctx.fillStyle = comboCount >= 5 ? '#ff4444' : comboCount >= 3 ? '#ffaa44' : '#ffdd44';
-        ctx.font = '12px "Press Start 2P"';
-        const cx = lastAttacker === player ? margin + 90 : W - margin - 90;
-        ctx.globalAlpha = Math.min(1, comboTimer);
-        ctx.fillText(comboCount + ' HIT COMBO!', cx, 90);
-        ctx.globalAlpha = 1;
-      }
+      // Center Clock
+      ctx.fillStyle = '#fff'; ctx.font = '900 22px "Outfit"'; ctx.textAlign = 'center';
+      ctx.fillText('RD ' + roundNumber, W / 2, 40);
+      ctx.font = '900 56px "Outfit"';
+      ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
+      ctx.fillText(Math.ceil(roundTimer).toString(), W / 2, 90);
+      ctx.shadowBlur = 0;
     }
 
     function drawBar(ctx, x, y, w, h, val, max, color, align) {
       const bx = align === 'right' ? x - w : x, pct = Math.max(0, val / max);
-      ctx.fillStyle = '#1a1a1a'; ctx.fillRect(bx, y, w, h);
-      ctx.fillStyle = color;
-      if (align === 'right') ctx.fillRect(bx + w * (1 - pct), y, w * pct, h);
-      else ctx.fillRect(bx, y, w * pct, h);
-      ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.strokeRect(bx, y, w, h);
+
+      // Bar Track
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.fillRect(bx, y, w, h);
+
+      // Value Fill with Gradient
+      const fillW = w * pct;
+      const fx = align === 'right' ? x - fillW : x;
+      const barGrd = ctx.createLinearGradient(fx, y, fx + fillW, y);
+      barGrd.addColorStop(0, color); barGrd.addColorStop(1, '#fff');
+      ctx.fillStyle = barGrd;
+      ctx.fillRect(fx, y, fillW, h);
+
+      // Reflection
+      ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(bx, y, w, h / 2);
     }
     function drawName(ctx, x, y, name, color, align) {
-      ctx.font = '8px "Press Start 2P"'; ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(name, x, y);
+      ctx.font = '900 16px "Outfit"'; ctx.fillStyle = '#fff'; ctx.textAlign = align;
+      ctx.fillText(name.toUpperCase(), x, y);
+      ctx.fillStyle = color;
+      ctx.fillRect(align === 'left' ? x : x - 40, y + 4, 40, 2);
     }
     function hpColor(hp, max) { const p = hp / max; return p > 0.5 ? C.hpGreen : p > 0.25 ? C.hpYellow : C.hpRed; }
 
@@ -1738,20 +1507,30 @@
       ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
       drawAudience(ctx); drawRing(ctx);
       ctx.textAlign = 'center';
-      ctx.fillStyle = C.textShadow; ctx.font = '28px "Press Start 2P"';
-      ctx.fillText('KNOCKOUT!', W / 2 + 2, 100 + 2);
-      ctx.fillStyle = C.gold; ctx.fillText('KNOCKOUT!', W / 2, 100);
-      ctx.fillStyle = C.ropes; ctx.font = '10px "Press Start 2P"';
-      ctx.fillText('RETRO BOXING', W / 2, 130);
-      // Party overlay handles the menu — show it
+
+      // Modern Title Typography
+      ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 15;
+      ctx.fillStyle = C.gold; ctx.font = '900 85px "Outfit"';
+      ctx.fillText('KNOCKOUT', W / 2, 120);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.8; ctx.font = '700 18px "Outfit"';
+      ctx.fillText('CINEMATIC BOXING EXPERIENCE', W / 2, 155);
+      ctx.globalAlpha = 1;
+
       if (!showPartyMenu) {
         document.getElementById('party-overlay').style.display = 'flex';
         document.getElementById('party-menu').style.display = 'flex';
         document.getElementById('waiting-screen').style.display = 'none';
         showPartyMenu = true;
       }
-      ctx.fillStyle = '#666'; ctx.font = '6px "Press Start 2P"';
-      ctx.fillText('WASD MOVE  LMB/ERQF PUNCH  S BLOCK  SPACE JUMP', W / 2, 340);
+
+      // Instruction Bar
+      const instY = H - 35;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, instY - 20, W, 40);
+      ctx.fillStyle = '#aaa'; ctx.font = '600 13px "Outfit"';
+      ctx.fillText('WASD MOVE  •  LMB/ERQF PUNCH  •  S BLOCK  •  SPACE JUMP', W / 2, instY + 5);
+
       drawVignette(ctx);
     }
 
@@ -1806,128 +1585,86 @@
 
         // Character name
         ctx.fillStyle = isSelected ? C.gold : ch.colors.main;
-        ctx.font = '12px "Press Start 2P"'; ctx.textAlign = 'center';
-        ctx.fillText(ch.name, cx + cardW / 2, cy + 22);
+        ctx.font = '900 24px "Outfit"'; ctx.textAlign = 'center';
+        ctx.fillText(ch.name, cx + cardW / 2, cy + 30);
 
         // Title
-        ctx.fillStyle = '#888'; ctx.font = '5px "Press Start 2P"';
-        ctx.fillText(ch.title, cx + cardW / 2, cy + 34);
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.6; ctx.font = '700 12px "Outfit"';
+        ctx.fillText(ch.title, cx + cardW / 2, cy + 48);
+        ctx.globalAlpha = 1;
 
         // Character preview (silhouette/body)
-        const previewX = cx + cardW / 2;
-        const previewY = cy + 130;
-        const sc = ch.bodyScale;
-
+        const sc = 2.0; // scale for preview
+        const bob = Math.sin(now * 0.003 + i) * 5;
         ctx.save();
-        ctx.translate(previewX, previewY);
+        ctx.translate(cx + cardW / 2, cy + 130 + bob);
 
-        // Idle bobbing
-        const bob = Math.sin(now * 0.004 + i * 2) * 2;
+        // Shadow base
+        const shdGrd = ctx.createRadialGradient(0, 30, 0, 0, 30, 25);
+        shdGrd.addColorStop(0, 'rgba(0,0,0,0.4)'); shdGrd.addColorStop(1, 'transparent');
+        ctx.fillStyle = shdGrd; ctx.beginPath(); ctx.ellipse(0, 30, 25, 8, 0, 0, Math.PI * 2); ctx.fill();
 
+        // ── Anatomy Preview ──
+        const sk = ch.colors.skin;
+        const mainC = ch.colors.main;
+        const skShd = ch.colors.skinShd || sk;
+        const gc = ch.colors.glove;
+        const hairC = ch.colors.hair || '#000';
+
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+        // Simple but high-fidelity preview body
         // Legs
-        ctx.strokeStyle = ch.colors.skin; ctx.lineWidth = ch.legThick;
-        ctx.beginPath(); ctx.moveTo(-8 * sc, 0); ctx.lineTo(-10 * sc, 30 * sc); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(8 * sc, 0); ctx.lineTo(10 * sc, 30 * sc); ctx.stroke();
-
-        // Boots
-        ctx.fillStyle = ch.colors.shoe;
-        ctx.fillRect(-14 * sc, 26 * sc, 8 * sc, 8 * sc);
-        ctx.fillRect(6 * sc, 26 * sc, 8 * sc, 8 * sc);
-
-        // Shorts
-        ctx.fillStyle = ch.colors.main;
-        ctx.fillRect(-12 * sc, -5, 24 * sc, 14 * sc);
-        ctx.fillStyle = ch.colors.trim;
-        ctx.fillRect(-12 * sc, 7 * sc, 24 * sc, 3);
+        ctx.strokeStyle = skShd; ctx.lineWidth = 12 * sc;
+        ctx.beginPath(); ctx.moveTo(-6 * sc, 10); ctx.lineTo(-10 * sc, 30); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(6 * sc, 10); ctx.lineTo(10 * sc, 30); ctx.stroke();
 
         // Torso
-        ctx.fillStyle = ch.colors.skin;
-        ctx.beginPath();
-        ctx.moveTo(-12 * sc, -5 + bob); ctx.lineTo(12 * sc, -5 + bob);
-        ctx.lineTo(14 * sc, -30 * sc + bob); ctx.lineTo(-14 * sc, -30 * sc + bob);
-        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = sk;
+        ctx.beginPath(); ctx.moveTo(-12 * sc, 10); ctx.lineTo(12 * sc, 10);
+        ctx.lineTo(14 * sc, -25 * sc); ctx.lineTo(-14 * sc, -25 * sc); ctx.fill();
 
-        // Shoulder caps
-        ctx.fillStyle = ch.colors.skinShd;
-        ctx.beginPath(); ctx.arc(-14 * sc, -28 * sc + bob, 5 * sc, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(14 * sc, -28 * sc + bob, 5 * sc, 0, Math.PI * 2); ctx.fill();
+        // Shorts
+        ctx.fillStyle = mainC; ctx.fillRect(-13 * sc, -2 * sc, 26 * sc, 14 * sc);
 
-        // Arms (guard position, animated)
-        const guardBob = Math.sin(now * 0.006 + i) * 3;
-        ctx.strokeStyle = ch.colors.skin; ctx.lineWidth = ch.armThick;
-        // Left arm
-        ctx.beginPath(); ctx.moveTo(-14 * sc, -26 * sc + bob);
-        ctx.lineTo(-18 * sc, -15 * sc + bob + guardBob); ctx.stroke();
-        // Right arm
-        ctx.beginPath(); ctx.moveTo(14 * sc, -26 * sc + bob);
-        ctx.lineTo(18 * sc, -15 * sc + bob - guardBob); ctx.stroke();
+        // Arms
+        ctx.strokeStyle = sk; ctx.lineWidth = 10 * sc;
+        ctx.beginPath(); ctx.moveTo(-14 * sc, -22 * sc); ctx.lineTo(-20 * sc, -5 * sc); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(14 * sc, -22 * sc); ctx.lineTo(20 * sc, -5 * sc); ctx.stroke();
 
         // Gloves
-        ctx.fillStyle = ch.colors.glove;
-        ctx.beginPath(); ctx.arc(-18 * sc, -15 * sc + bob + guardBob, 7 * sc, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(18 * sc, -15 * sc + bob - guardBob, 7 * sc, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = gc;
+        ctx.beginPath(); ctx.arc(-20 * sc, -5 * sc, 8 * sc, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(20 * sc, -5 * sc, 8 * sc, 0, Math.PI * 2); ctx.fill();
 
         // Head
-        const headR = 12 * ch.headSize * sc;
-        const headY = -35 * sc + bob;
-        ctx.fillStyle = ch.colors.skin;
-        ctx.beginPath(); ctx.arc(0, headY, headR, 0, Math.PI * 2); ctx.fill();
-
-        // Hair style
-        ctx.fillStyle = ch.colors.hair;
-        if (ch.hairStyle === 'mohawk') {
-          // Spiky mohawk
-          for (let s = -3; s <= 3; s++) {
-            ctx.beginPath();
-            ctx.moveTo(s * 2.5, headY - headR + 2);
-            ctx.lineTo(s * 1.5, headY - headR - 8);
-            ctx.lineTo(s * 2.5 + 2, headY - headR + 2);
-            ctx.fill();
-          }
-        } else if (ch.hairStyle === 'bald') {
-          // Bald — just a shine
-          ctx.fillStyle = 'rgba(255,255,255,0.1)';
-          ctx.beginPath(); ctx.arc(-2, headY - headR * 0.5, headR * 0.4, 0, Math.PI * 2); ctx.fill();
-        } else {
-          // Short cropped
-          ctx.beginPath();
-          ctx.arc(0, headY - 2, headR + 1, Math.PI, 0); ctx.fill();
-        }
-
-        // Eyes
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(-4, headY - 1, 2.5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(4, headY - 1, 2.5, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#111';
-        ctx.beginPath(); ctx.arc(-3.5, headY - 0.5, 1.2, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(4.5, headY - 0.5, 1.2, 0, Math.PI * 2); ctx.fill();
+        const hRad = 12 * sc;
+        ctx.fillStyle = sk; ctx.beginPath(); ctx.arc(0, -32 * sc, hRad, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = hairC;
+        ctx.beginPath(); ctx.arc(0, -34 * sc, hRad + 1, Math.PI, 0); ctx.fill();
 
         ctx.restore();
 
         // Description
-        ctx.fillStyle = '#aaa'; ctx.font = '5px "Press Start 2P"'; ctx.textAlign = 'center';
-        ctx.fillText(ch.desc, cx + cardW / 2, cy + 200);
+        ctx.fillStyle = '#fff'; ctx.font = '400 13px "Outfit"'; ctx.textAlign = 'center';
+        ctx.fillText(ch.desc, cx + cardW / 2, cy + 205);
 
-        // Stat bars
+        // Stats UI
         const statNames = Object.keys(ch.statBars);
-        const barStartY = cy + 215;
-        for (let s = 0; s < statNames.length; s++) {
-          const sn = statNames[s];
+        const barStartY = cy + 225;
+        statNames.forEach((sn, si) => {
           const sv = ch.statBars[sn];
-          const sy = barStartY + s * 12;
+          const bsy = barStartY + si * 14;
+          ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '600 11px "Outfit"'; ctx.textAlign = 'left';
+          ctx.fillText(sn.toUpperCase(), cx + 15, bsy + 4);
 
-          ctx.fillStyle = '#666'; ctx.font = '5px "Press Start 2P"'; ctx.textAlign = 'left';
-          ctx.fillText(sn, cx + 10, sy + 4);
-
-          // Stat bar background
-          ctx.fillStyle = '#1a1a1a';
-          ctx.fillRect(cx + 45, sy - 2, 120, 8);
-
-          // Stat bar fill
-          const barColors = { 1: '#ff4444', 2: '#ff8844', 3: '#ffdd44', 4: '#88dd44', 5: '#44ff44' };
-          ctx.fillStyle = barColors[sv] || '#888';
-          ctx.fillRect(cx + 45, sy - 2, (sv / 5) * 120, 8);
-        }
+          // Custom stat segment drawing
+          for (let seg = 0; seg < 5; seg++) {
+            ctx.fillStyle = seg < sv ? ch.colors.main : 'rgba(255,255,255,0.1)';
+            const segX = cx + 80 + seg * 18;
+            ctx.fillRect(segX, bsy - 3, 14, 6);
+          }
+        });
       }
 
       // Instructions
@@ -1964,30 +1701,37 @@
     let charSelectBtnRegion = null;
 
     function drawKO(ctx) {
+      ctx.save();
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#000a'; ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = C.hpRed; ctx.font = '32px "Press Start 2P"';
-      ctx.fillText('K.O.!', W / 2, H / 2 - 20);
-      const winner = koTarget === enemy ? player.name : enemy.name;
-      ctx.fillStyle = C.gold; ctx.font = '12px "Press Start 2P"';
-      ctx.fillText(winner + ' WINS THE ROUND!', W / 2, H / 2 + 20);
 
-      // Victory animation (winner bobs)
+      // Backdrop blur-ish effect
+      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, W, H);
+
+      // KO Banner
+      ctx.fillStyle = '#ff4444'; ctx.font = '900 120px "Outfit"';
+      ctx.shadowColor = '#000'; ctx.shadowBlur = 20;
+      ctx.fillText('K.O.', W / 2, H / 2);
+      ctx.shadowBlur = 0;
+
+      const winner = koTarget === enemy ? player.name : enemy.name;
+      ctx.fillStyle = C.gold; ctx.font = '900 24px "Outfit"';
+      ctx.fillText(winner.toUpperCase() + ' WINS THE ROUND!', W / 2, H / 2 + 50);
+
+      // Victory text for winner
       victoryTimer += 0.05;
       const wBox = koTarget === enemy ? player : enemy;
       if (wBox) {
-        const vy = Math.abs(Math.sin(victoryTimer * 3)) * 5;
-        ctx.save();
-        ctx.translate(wBox.x, wBox.y - vy);
-        ctx.fillStyle = C.gold; ctx.font = '6px "Press Start 2P"'; ctx.textAlign = 'center';
-        ctx.fillText('WINNER', 0, -65);
-        ctx.restore();
+        const vy = Math.abs(Math.sin(victoryTimer * 3.5)) * 8;
+        ctx.fillStyle = C.gold; ctx.font = '900 18px "Outfit"';
+        ctx.fillText('VICTORY', wBox.x, wBox.y - 100 - vy);
       }
 
       if (koTimer <= 0) {
-        ctx.fillStyle = C.white; ctx.font = '8px "Press Start 2P"'; ctx.textAlign = 'center';
-        ctx.fillText('PRESS SPACE FOR NEXT ROUND', W / 2, H / 2 + 60);
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.7; ctx.font = '600 16px "Outfit"';
+        ctx.fillText('PRESS SPACE FOR NEXT ROUND', W / 2, H - 50);
+        ctx.globalAlpha = 1;
       }
+      ctx.restore();
     }
 
     // ── Main Loop ──
