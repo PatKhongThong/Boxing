@@ -419,6 +419,10 @@
 
     // ── Character Roster ──
     let selectedCharIdx = 0;
+    let charSelectScroll = 0;
+    let charSelectTargetScroll = 0;
+    let charSelectDragging = false;
+    let charSelectLastDragX = 0;
     const CHARACTERS = [
       {
         name: 'FLASH',
@@ -1590,11 +1594,21 @@
 
       const cardW = 180, cardH = 280, gap = 15;
       const totalW = CHARACTERS.length * cardW + (CHARACTERS.length - 1) * gap;
+
+      // Clamp target scroll
+      const maxScroll = Math.max(0, totalW - (W - 80)); // 40px padding each side
+      charSelectTargetScroll = Math.max(0, Math.min(maxScroll, charSelectTargetScroll));
+
       const startX = (W - totalW) / 2;
+      // If we have more characters than fit, start from the left instead of centering
+      const drawStartX = totalW > W - 80 ? 40 : startX;
+
+      ctx.save();
+      ctx.translate(-charSelectScroll, 0);
 
       for (let i = 0; i < CHARACTERS.length; i++) {
         const ch = CHARACTERS[i];
-        const cx = startX + i * (cardW + gap);
+        const cx = drawStartX + i * (cardW + gap);
         const cy = 55;
         const isSelected = i === selectedCharIdx;
         const isHover = charHoverIdx === i;
@@ -1736,6 +1750,18 @@
       charSelectBtnRegion = { x: btnX, y: btnY, w: btnW, h: btnH };
 
       drawVignette(ctx);
+      ctx.restore();
+
+      // Scroll indicators (if overflow)
+      if (maxScroll > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        if (charSelectScroll > 20) { // Left arrow
+          ctx.beginPath(); ctx.moveTo(25, H / 2); ctx.lineTo(40, H / 2 - 15); ctx.lineTo(40, H / 2 + 15); ctx.fill();
+        }
+        if (charSelectScroll < maxScroll - 20) { // Right arrow
+          ctx.beginPath(); ctx.moveTo(W - 25, H / 2); ctx.lineTo(W - 40, H / 2 - 15); ctx.lineTo(W - 40, H / 2 + 15); ctx.fill();
+        }
+      }
     }
 
     // Click regions for character select
@@ -1792,6 +1818,8 @@
       }
 
       if (gameState === 'CHARSELECT') {
+        // Smooth scroll lerp
+        charSelectScroll += (charSelectTargetScroll - charSelectScroll) * 0.15;
         drawCharSelect(ctx);
         return;
       }
@@ -2167,13 +2195,18 @@
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
 
+      // Adjust mx for scroll
+      const scrollAdjustedMx = mx + charSelectScroll;
+
       // Check card clicks
       const cardW = 180, cardH = 280, gap = 15;
       const totalW = CHARACTERS.length * cardW + (CHARACTERS.length - 1) * gap;
       const startX = (W - totalW) / 2;
+      const drawStartX = totalW > W - 80 ? 40 : startX;
+
       for (let i = 0; i < CHARACTERS.length; i++) {
-        const cx = startX + i * (cardW + gap), cy = 55;
-        if (mx >= cx && mx <= cx + cardW && my >= cy && my <= cy + cardH) {
+        const cx = drawStartX + i * (cardW + gap), cy = 55;
+        if (scrollAdjustedMx >= cx && scrollAdjustedMx <= cx + cardW && my >= cy && my <= cy + cardH) {
           selectedCharIdx = i;
           if (isOnlineMode) {
             PM.playerReady = false;
@@ -2185,7 +2218,7 @@
         }
       }
 
-      // Check start button click
+      // Check start button click (not affected by scroll)
       if (charSelectBtnRegion) {
         const b = charSelectBtnRegion;
         if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
@@ -2204,22 +2237,54 @@
 
     // Hover tracking for char select
     canvas.addEventListener('mousemove', (e) => {
-      if (gameState !== 'CHARSELECT') { charHoverIdx = -1; return; }
       const rect = canvas.getBoundingClientRect();
       const scaleX = W / rect.width, scaleY = H / rect.height;
       const mx = (e.clientX - rect.left) * scaleX;
       const my = (e.clientY - rect.top) * scaleY;
-      charHoverIdx = -1;
-      const cardW = 180, cardH = 280, gap = 15;
-      const totalW = CHARACTERS.length * cardW + (CHARACTERS.length - 1) * gap;
-      const startX = (W - totalW) / 2;
-      for (let i = 0; i < CHARACTERS.length; i++) {
-        const cx = startX + i * (cardW + gap), cy = 55;
-        if (mx >= cx && mx <= cx + cardW && my >= cy && my <= cy + cardH) {
-          charHoverIdx = i;
+
+      if (gameState === 'CHARSELECT') {
+        const scrollAdjustedMx = mx + charSelectScroll;
+        charHoverIdx = -1;
+        const cardW = 180, cardH = 280, gap = 15;
+        const totalW = CHARACTERS.length * cardW + (CHARACTERS.length - 1) * gap;
+        const startX = (W - totalW) / 2;
+        const drawStartX = totalW > W - 80 ? 40 : startX;
+
+        for (let i = 0; i < CHARACTERS.length; i++) {
+          const cx = drawStartX + i * (cardW + gap), cy = 55;
+          if (scrollAdjustedMx >= cx && scrollAdjustedMx <= cx + cardW && my >= cy && my <= cy + cardH) {
+            charHoverIdx = i;
+          }
+        }
+
+        // Drag scrolling logic
+        if (charSelectDragging) {
+          const dx = mx - charSelectLastX;
+          charSelectTargetScroll -= dx;
+          charSelectScroll -= dx; // Immediate feedback
+          charSelectLastX = mx;
         }
       }
     });
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (gameState !== 'CHARSELECT') return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = W / rect.width;
+      const mx = (e.clientX - rect.left) * scaleX;
+      charSelectDragging = true;
+      charSelectLastX = mx;
+    });
+
+    window.addEventListener('mouseup', () => {
+      charSelectDragging = false;
+    });
+
+    canvas.addEventListener('wheel', (e) => {
+      if (gameState !== 'CHARSELECT') return;
+      charSelectTargetScroll += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
 
     // Space to start from charselect
     window.addEventListener('keydown', (e) => {
