@@ -756,7 +756,7 @@
 
         // Attack timer
         if (this.attacking && !this.isStunned) {
-          const punchDur = (this.barrageHits > 0) ? this.currentPunch.dur * 0.25 : this.currentPunch.dur;
+          const punchDur = (this.barrageHits > 0) ? this.currentPunch.dur * 0.5 : this.currentPunch.dur;
           this.attackTimer -= dt * 1000;
           let progress = 1 - (this.attackTimer / punchDur);
           if (progress < 0.3) this.punchArmExt = progress / 0.3;
@@ -765,7 +765,7 @@
           if (this.attackTimer <= 0) {
             if (this.barrageHits > 0) {
               this.barrageHits--;
-              this.attackTimer = this.currentPunch.dur * 0.25;
+              this.attackTimer = this.currentPunch.dur * 0.5;
               this.hitRegistered = false;
               this.punchArmExt = 0;
             } else {
@@ -1513,8 +1513,17 @@
         const headZone = victim.headY + 5;
         let dmg = attacker.currentPunch.dmg * (attacker.dmgMult || 1);
         if (attacker.isCluckFury) dmg *= 5.0; // 5x Damage buff during Cluck Fury
+
+        // Barrage override: each hit deals 1/10 of victim's remaining HP (always lethal after 10 hits)
+        if (attacker.barrageHits > 0 || (attacker.isCluckFury && attacker.currentPunch.name === 'JAB')) {
+          dmg = victim.hp / 10;
+          // Freeze victim during barrage
+          victim.stunTimer = Math.max(victim.stunTimer, 0.3);
+          victim.knockbackVx = 0;
+        }
+
         let isHead = hitY < headZone && !attacker.currentPunch.bodyShot;
-        if (isHead) dmg *= attacker.currentPunch.headMult;
+        if (isHead && !(attacker.barrageHits > 0)) dmg *= attacker.currentPunch.headMult;
 
         victim.takeDamage(dmg, attacker.x, attacker.currentPunch, isHead);
 
