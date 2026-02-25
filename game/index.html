@@ -1767,6 +1767,17 @@
           ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(sx, sy, sideW, sideH);
           ctx.fillStyle = '#fff'; ctx.font = '600 8px "Outfit"'; ctx.textAlign = i === 0 ? 'left' : 'right';
           ctx.fillText(b.abilityCharge >= 100 ? 'Q - READY!' : 'CLUCK FURY', i === 0 ? sx : sx + sideW, sy - 4);
+
+          // Central Pulse Instruction
+          if (b.abilityCharge >= 100 && b.isPlayer) {
+            ctx.save();
+            const pulse = 0.6 + Math.sin(Date.now() * 0.006) * 0.4;
+            ctx.globalAlpha = pulse;
+            ctx.shadowBlur = 15; ctx.shadowColor = '#fff700';
+            ctx.fillStyle = '#fff700'; ctx.font = '900 24px "Outfit"'; ctx.textAlign = 'center';
+            ctx.fillText('PRESS Q TO ACTIVATE', W / 2, 140);
+            ctx.restore();
+          }
         }
       });
 
