@@ -514,6 +514,9 @@
 
     // ── Character Roster ──
     let selectedCharIdx = 0;
+    let cutsceneActive = false, cutsceneTimer = 0, cutsceneBoxer = null;
+    let cameraZoom = 1.0, cameraTargetX = W / 2, cameraTargetY = H / 2;
+    let cameraX = W / 2, cameraY = H / 2;
     let charSelectScroll = 0;
     let charSelectTargetScroll = 0;
     let charSelectDragging = false;
@@ -2077,9 +2080,33 @@
       const dt_real = dt; // keep real dt for cutscenes
       lastTime = timestamp;
 
-      cameraZoom += (1.0 - cameraZoom) * 0.1;
-      cameraX += (W / 2 - cameraX) * 0.1;
-      cameraY += (H / 2 - cameraY) * 0.1;
+      // Cutscene logic
+      if (cutsceneActive) {
+        cutsceneTimer -= dt_real;
+        if (cutsceneTimer <= 0) {
+          cutsceneActive = false;
+          cameraZoom = 1.0;
+        } else {
+          // Cinematic effects
+          const progress = 1 - (cutsceneTimer / 1.5);
+          if (progress < 0.2) cameraZoom = 1.0 + progress * 5; // Zoom in
+          else if (progress < 0.8) cameraZoom = 2.0; // Hold
+          else cameraZoom = 2.0 - (progress - 0.8) * 5; // Zoom out
+
+          if (cutsceneBoxer) {
+            cameraTargetX = cutsceneBoxer.x;
+            cameraTargetY = cutsceneBoxer.y - 40;
+          }
+          // Lerp camera
+          cameraX += (cameraTargetX - cameraX) * 0.15;
+          cameraY += (cameraTargetY - cameraY) * 0.15;
+        }
+        dt = 0; // Pause game logic during cutscene
+      } else {
+        cameraZoom += (1.0 - cameraZoom) * 0.1;
+        cameraX += (W / 2 - cameraX) * 0.1;
+        cameraY += (H / 2 - cameraY) * 0.1;
+      }
 
       // Slow-mo
       if (slowMoTimer > 0) { slowMoTimer -= dt; dt *= slowMoScale; slowMoScale = Math.min(1, slowMoScale + 0.01); }
@@ -2245,6 +2272,15 @@
 
       ctx.restore();
 
+      // UI (Not affected by camera scale)
+      if (cutsceneActive) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#fff700'; ctx.font = '900 60px "Outfit"'; ctx.textAlign = 'center';
+        ctx.shadowColor = '#000'; ctx.shadowBlur = 20;
+        ctx.fillText('CLUCK FURY', W / 2, H / 2);
+        ctx.shadowBlur = 0;
+      }
+
 
       if (gameState === 'KO') drawKO(ctx);
     }
@@ -2405,7 +2441,8 @@
         hs: Math.round(b.headSnapBack * 10) / 10, sn: b.stunTimer > 0 ? 1 : 0,
         bp: Math.round(b.bobPhase * 10) / 10, br: Math.round(b.breathPhase * 10) / 10,
         sp: Math.round(b.staggerPhase * 10) / 10, vy: Math.round(b.vy * 10) / 10,
-        gr: b.isGrounded ? 1 : 0, kb: Math.round(b.knockbackVx * 10) / 10, sc: b.score
+        gr: b.isGrounded ? 1 : 0, kb: Math.round(b.knockbackVx * 10) / 10, sc: b.score,
+        bc: Math.round(b.abilityCharge), cf: b.isCluckFury ? 1 : 0
       };
     }
     function applyReceivedGameState(gs) {
@@ -2586,7 +2623,14 @@
       }
 
       // Ability Activation (Q)
-      if (gameState === 'FIGHTING' && e.code === 'KeyQ' && player.name === 'CHESTER' && player.abilityCharge >= 100 && !player.isCluckFury) {
+      if (gameState === 'FIGHTING' && e.code === 'KeyQ' && player.name === 'CHESTER' && player.abilityCharge >= 100 && !player.isCluckFury && !cutsceneActive) {
+        // Trigger Cinematic Cutscene
+        cutsceneActive = true;
+        cutsceneTimer = 1.5;
+        cutsceneBoxer = player;
+        cameraTargetX = player.x;
+        cameraTargetY = player.y - 40;
+
         player.isCluckFury = true;
         player.cluckFuryTimer = 8;
         player.abilityCharge = 0;
