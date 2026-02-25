@@ -2093,7 +2093,7 @@
       charSelectBtnRegion = { x: btnX, y: btnY, w: btnW, h: btnH };
 
       // Test Mode button (Chester only) — draw ABOVE START FIGHT
-      const isChester = CHARACTERS[selectedCharIdx] && CHARACTERS[selectedCharIdx].name === 'CHESTER';
+      const isChester = CHARACTERS[selectedCharIdx] && CHARACTERS[selectedCharIdx].name === 'CHESTER' && !isCharLocked(CHARACTERS[selectedCharIdx]);
       if (isChester && !isOnlineMode) {
         const tbW = 140, tbH = 22;
         const tbX = W / 2 - tbW / 2, tbY = btnY - tbH - 10;
@@ -2265,10 +2265,22 @@
         } else {
           if (mouseDown) { player.punch('jab'); mouseDown = false; }
         }
-        if (keys['KeyE']) { player.punch('cross'); keys['KeyE'] = false; }
-        if (keys['KeyR']) { player.punch('hook'); keys['KeyR'] = false; }
-        if (keys['KeyF']) { player.punch('uppercut'); keys['KeyF'] = false; }
-        if (keys['KeyQ']) { player.punch('bodyshot'); keys['KeyQ'] = false; }
+        if (keys['KeyE']) {
+          if (player.barrageHits > 0) { player.barrageHits = 0; player.attacking = false; player.currentPunch = null; player.punchArmExt = 0; player.attackCooldown = 0; }
+          player.punch('cross'); keys['KeyE'] = false;
+        }
+        if (keys['KeyR']) {
+          if (player.barrageHits > 0) { player.barrageHits = 0; player.attacking = false; player.currentPunch = null; player.punchArmExt = 0; player.attackCooldown = 0; }
+          player.punch('hook'); keys['KeyR'] = false;
+        }
+        if (keys['KeyF']) {
+          if (player.barrageHits > 0) { player.barrageHits = 0; player.attacking = false; player.currentPunch = null; player.punchArmExt = 0; player.attackCooldown = 0; }
+          player.punch('uppercut'); keys['KeyF'] = false;
+        }
+        if (keys['KeyQ']) {
+          if (player.barrageHits > 0) { player.barrageHits = 0; player.attacking = false; player.currentPunch = null; player.punchArmExt = 0; player.attackCooldown = 0; }
+          player.punch('bodyshot'); keys['KeyQ'] = false;
+        }
         // Reset dash if no direction held
         if (!keys['KeyA'] && !keys['KeyD']) dashPunchReady = false;
 
@@ -2717,7 +2729,7 @@
         }
       }
       // Check test mode button click
-      if (charSelectTestBtnRegion) {
+      if (charSelectTestBtnRegion && !isCharLocked(CHARACTERS[selectedCharIdx])) {
         const tb = charSelectTestBtnRegion;
         if (mx >= tb.x && mx <= tb.x + tb.w && my >= tb.y && my <= tb.y + tb.h) {
           startTestMode();
