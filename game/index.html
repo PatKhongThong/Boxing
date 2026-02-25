@@ -2804,6 +2804,21 @@
         e.preventDefault();
       }
 
+      // Double-tap J → Test Mode (Chester only)
+      if (gameState === 'CHARSELECT' && e.code === 'KeyJ') {
+        const ch = CHARACTERS[selectedCharIdx];
+        if (ch && ch.name === 'CHESTER' && !isCharLocked(ch) && !isOnlineMode) {
+          if (!window._lastJTap) window._lastJTap = 0;
+          const now = performance.now();
+          if (now - window._lastJTap < 400) {
+            startTestMode();
+            window._lastJTap = 0;
+          } else {
+            window._lastJTap = now;
+          }
+        }
+      }
+
       // Ability Activation (Q)
       if (gameState === 'FIGHTING' && e.code === 'KeyQ' && player.name === 'CHESTER' && player.abilityCharge >= 100 && !player.isCluckFury && !cutsceneActive) {
         // Trigger Cinematic Cutscene
