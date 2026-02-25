@@ -667,7 +667,7 @@
       {
         name: 'CHESTER',
         title: 'THE CHICKEN',
-        desc: 'Fear the feathers. Pure speed and power.',
+        desc: 'Fear the feathers. Deals massive damage to unlock Cluck Fury (3x Reach/Stamina, 2x Damage).',
         hp: 200, stamina: 200, speed: 6.0, retreatMod: 1.0, jumpForce: -12, blockDmgReduction: 0.8,
         dmgMult: 1.5, staminaRegen: 30,
         bodyScale: 1.0, headSize: 1.0, armThick: 4, legThick: 4,
@@ -730,9 +730,12 @@
         this.headSnapBack = 0;   // head snap-back on hit
         this.breathPhase = 0;    // idle breathing
 
-        // Mouse aim offset for player (vertical glove target)
-        this.aimY = 0; // -1 = head, 0 = mid, 1 = body
         this.mouseAimAngle = 0; // angle from shoulder to mouse cursor
+
+        // Chester Ability state
+        this.abilityCharge = 0;
+        this.isCluckFury = false;
+        this.cluckFuryTimer = 0;
       }
 
       get centerX() { return this.x; }
@@ -746,7 +749,18 @@
         this.breathPhase += dt * 2.5;
 
         // Stun timer
-        if (this.stunTimer > 0) { this.stunTimer -= dt; this.attacking = false; }
+        if (this.stunTimer > 0 && !this.isCluckFury) { this.stunTimer -= dt; this.attacking = false; }
+        else if (this.isCluckFury) { this.stunTimer = 0; }
+
+        // Cluck Fury logic
+        if (this.isCluckFury) {
+          this.cluckFuryTimer -= dt;
+          if (this.cluckFuryTimer <= 0) {
+            this.isCluckFury = false;
+          }
+          // Buffed stamina regeneration (3.9x)
+          this.stamina = Math.min(this.maxStamina, this.stamina + (this.staminaRegen || 12) * dt * 3.9);
+        }
 
         // Stagger at low HP
         if (this.hp / this.maxHp < 0.25) {
@@ -867,11 +881,12 @@
         const ext = this.punchArmExt;
         if (ext < 0.7) return null;
         const p = this.currentPunch;
-        const hx = this.x + this.facing * (15 + p.reach * ext);
+        const reachBoost = this.isCluckFury ? 3.0 : 1.0;
+        const hx = this.x + this.facing * (15 + p.reach * ext * reachBoost);
         // Mouse aim shifts hitbox Y for player
         let hy = this.headY - 5 + (this.isPlayer ? this.aimY * 15 : 0);
         if (p.bodyShot) hy = this.bodyY - 5;
-        return { x: hx - 12, y: hy, w: 24, h: p.bodyShot ? 20 : 30 };
+        return { x: hx - 12 * reachBoost, y: hy, w: 24 * reachBoost, h: p.bodyShot ? 20 : 30 };
       }
 
       getHurtbox() {
@@ -899,6 +914,9 @@
           this.stamina -= (punch.staDmg || 15);
           if (this.stamina < 0) this.stamina = 0;
         }
+
+        // 3.9x Defense buff during Cluck Fury
+        if (this.isCluckFury) finalDmg /= 3.9;
 
         this.hp -= finalDmg;
         this.hitFlash = 0.15;
@@ -944,6 +962,18 @@
         const punchLeanY = this.currentPunch ? this.currentPunch.leanY * this.punchArmExt : 0;
         const lx = lean + punchLean; // combined lean X
         const ly = punchLeanY;       // combined lean Y
+
+        // Aura for Cluck Fury
+        if (this.isCluckFury) {
+          ctx.save();
+          ctx.globalAlpha = 0.4 + Math.sin(Date.now() * 0.01) * 0.2;
+          ctx.shadowBlur = 20; ctx.shadowColor = '#fff700';
+          ctx.strokeStyle = '#fff700'; ctx.lineWidth = 15;
+          ctx.beginPath();
+          ctx.ellipse(lx, -30 + bob + ly, 20, 40, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
 
         const sk = flash ? '#fff' : this.colors.skin;
         const skShd = flash ? '#ddd' : (this.colors.skinShd || this.colors.skin);
@@ -1458,10 +1488,16 @@
         const hitY = hb.y + hb.h / 2;
         const headZone = victim.headY + 5;
         let dmg = attacker.currentPunch.dmg * (attacker.dmgMult || 1);
+        if (attacker.isCluckFury) dmg *= 2.0; // 2x Damage buff during Cluck Fury
         let isHead = hitY < headZone && !attacker.currentPunch.bodyShot;
         if (isHead) dmg *= attacker.currentPunch.headMult;
 
         victim.takeDamage(dmg, attacker.x, attacker.currentPunch, isHead);
+
+        // Ability charging (offensive)
+        if (attacker.name === 'CHESTER' && !attacker.isCluckFury) {
+          attacker.abilityCharge = Math.min(100, attacker.abilityCharge + dmg * 0.6);
+        }
 
 
         // Crowd reacts to hits
@@ -1728,6 +1764,21 @@
       ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
       ctx.fillText(Math.ceil(roundTimer).toString(), W / 2, 90);
       ctx.shadowBlur = 0;
+
+      // Ability Charge Bar (Only for Chester)
+      [leftBoxer, rightBoxer].forEach((b, i) => {
+        if (b.name === 'CHESTER') {
+          const sideW = 120, sideH = 6;
+          const sx = i === 0 ? margin : W - margin - sideW;
+          const sy = 65;
+          ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(sx, sy, sideW, sideH);
+          ctx.fillStyle = b.abilityCharge >= 100 ? '#fff700' : '#ffcc00';
+          ctx.fillRect(sx, sy, (b.abilityCharge / 100) * sideW, sideH);
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(sx, sy, sideW, sideH);
+          ctx.fillStyle = '#fff'; ctx.font = '600 8px "Outfit"'; ctx.textAlign = i === 0 ? 'left' : 'right';
+          ctx.fillText(b.abilityCharge >= 100 ? 'Q - READY!' : 'CLUCK FURY', i === 0 ? sx : sx + sideW, sy - 4);
+        }
+      });
 
     }
 
@@ -2383,6 +2434,7 @@
       b.headSnapBack = s.hs; b.stunTimer = s.sn ? 0.2 : 0;
       b.bobPhase = s.bp; b.breathPhase = s.br; b.staggerPhase = s.sp;
       b.vy = s.vy; b.isGrounded = !!s.gr; b.knockbackVx = s.kb; b.score = s.sc;
+      b.abilityCharge = s.bc || 0; b.isCluckFury = !!s.cf;
     }
     function applyGuestInput(boxer, inp) {
       if (!inp) return;
@@ -2402,6 +2454,12 @@
         if (inp.ac.hook > lastHostActionCounts.hook) boxer.punch('hook');
         if (inp.ac.upper > lastHostActionCounts.upper) boxer.punch('uppercut');
         if (inp.ac.body > lastHostActionCounts.body) boxer.punch('bodyshot');
+        if (inp.ac.ability > lastHostActionCounts.ability) {
+          if (boxer.name === 'CHESTER' && boxer.abilityCharge >= 100) {
+            boxer.isCluckFury = true; boxer.cluckFuryTimer = 8; boxer.abilityCharge = 0;
+            spawnFloatingText(boxer.x, boxer.headY - 40, 'CLUCK FURY!', '#fff700');
+          }
+        }
         lastHostActionCounts = Object.assign({}, inp.ac);
       }
     }
@@ -2527,9 +2585,15 @@
         e.preventDefault();
       }
 
-      // Ability activation (Q)
-      // Bodyshot (Q)
-      if (gameState === 'FIGHTING' && e.code === 'KeyQ') {
+      // Ability Activation (Q)
+      if (gameState === 'FIGHTING' && e.code === 'KeyQ' && player.name === 'CHESTER' && player.abilityCharge >= 100 && !player.isCluckFury) {
+        player.isCluckFury = true;
+        player.cluckFuryTimer = 8;
+        player.abilityCharge = 0;
+        spawnFloatingText(player.x, player.headY - 40, 'CLUCK FURY!', '#fff700');
+        boostCrowdExcitement(0.5);
+        if (isOnlineMode) PM.sendInput({ type: 'ability_activation' });
+      } else if (gameState === 'FIGHTING' && e.code === 'KeyQ') {
         player.punch('bodyshot');
         if (isOnlineMode) PM.sendInput({ type: 'bodyshot' });
       }
@@ -2569,7 +2633,8 @@
       const map = { KeyE: 'cross', KeyR: 'hook', KeyF: 'upper', Space: 'jump' };
       if (map[e.code]) { guestActionCounts[map[e.code]]++; }
       if (e.code === 'KeyQ') {
-        guestActionCounts.body++;
+        if (player.name === 'CHESTER' && player.abilityCharge >= 100) guestActionCounts.ability++;
+        else guestActionCounts.body++;
       }
     });
     // LMB jab counter for guest
