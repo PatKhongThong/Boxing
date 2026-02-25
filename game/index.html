@@ -862,8 +862,10 @@
         // Mutated Jab Barrage
         if (type === 'jab' && this.isCluckFury && this.name === 'CHESTER') {
           this.barrageHits = 9; // 10 hits total
+          this.barrageDmgPerHit = 0; // will be set on first hit in doHitCheck
         } else {
           this.barrageHits = 0;
+          this.barrageDmgPerHit = 0;
         }
 
         // Dash punch forward burst
@@ -1514,16 +1516,21 @@
         let dmg = attacker.currentPunch.dmg * (attacker.dmgMult || 1);
         if (attacker.isCluckFury) dmg *= 5.0; // 5x Damage buff during Cluck Fury
 
-        // Barrage override: each hit deals 1/10 of victim's remaining HP (always lethal after 10 hits)
-        if (attacker.barrageHits > 0 || (attacker.isCluckFury && attacker.currentPunch.name === 'JAB')) {
-          dmg = victim.hp / 10;
+        // Barrage override: snapshot victim HP on first hit, deal fixed amount per hit
+        const isBarrageHit = attacker.barrageHits > 0 || (attacker.isCluckFury && attacker.currentPunch.name === 'JAB' && attacker.barrageDmgPerHit > 0);
+        if (isBarrageHit || (attacker.isCluckFury && attacker.currentPunch.name === 'JAB' && attacker.barrageDmgPerHit === 0)) {
+          // Snapshot on first barrage hit
+          if (attacker.barrageDmgPerHit === 0) {
+            attacker.barrageDmgPerHit = victim.hp / 10;
+          }
+          dmg = attacker.barrageDmgPerHit;
           // Freeze victim during barrage
           victim.stunTimer = Math.max(victim.stunTimer, 0.3);
           victim.knockbackVx = 0;
         }
 
         let isHead = hitY < headZone && !attacker.currentPunch.bodyShot;
-        if (isHead && !(attacker.barrageHits > 0)) dmg *= attacker.currentPunch.headMult;
+        if (isHead && attacker.barrageHits <= 0 && attacker.barrageDmgPerHit === 0) dmg *= attacker.currentPunch.headMult;
 
         victim.takeDamage(dmg, attacker.x, attacker.currentPunch, isHead);
 
