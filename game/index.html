@@ -5,11 +5,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KNOCKOUT! — Retro Boxing</title>
-  <!-- Firebase SDK (Compat version for easier single-file integration) -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
-  <script src="firebase-config.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&family=Inter:wght@400;600&display=swap');
 
@@ -2688,10 +2683,7 @@
     PM.init();
     resetFighters();
     requestAnimationFrame(gameLoop);
-    // ── Firebase Authentication ──
-    const auth = firebase.auth();
-    const db = firebase.database();
-
+    // ── Local Authentication ──
     const authOverlay = document.getElementById('auth-overlay');
     const btnLogin = document.getElementById('btn-login');
     const btnRegister = document.getElementById('btn-register');
@@ -2700,27 +2692,30 @@
     const passInput = document.getElementById('auth-password');
     const errorDiv = document.getElementById('auth-error');
 
-    function validateEmail(email) {
-      return email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
+    async function localAuthRequest(endpoint, data) {
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        return await res.json();
+      } catch (err) {
+        return { success: false, message: 'SERVER ERROR' };
+      }
     }
 
     btnRegister.addEventListener('click', async () => {
       const email = emailInput.value;
       const pass = passInput.value;
-      if (!validateEmail(email)) { errorDiv.textContent = 'INVALID EMAIL FORMAT'; return; }
-      if (pass.length < 6) { errorDiv.textContent = 'PASSWORD TOO SHORT (MIN 6)'; return; }
+      errorDiv.textContent = 'REGISTERING...';
 
-      try {
-        const cred = await auth.createUserWithEmailAndPassword(email, pass);
-        await db.ref('users/' + cred.user.uid).set({
-          email: email,
-          created: Date.now(),
-          wins: 0,
-          losses: 0
-        });
+      const res = await localAuthRequest('/api/register', { email, password: pass });
+      if (res.success) {
         authOverlay.style.display = 'none';
-      } catch (err) {
-        errorDiv.textContent = err.message.toUpperCase();
+        localStorage.setItem('knockout_user', email);
+      } else {
+        errorDiv.textContent = res.message.toUpperCase();
       }
     });
 
@@ -2728,11 +2723,14 @@
       const email = emailInput.value;
       const pass = passInput.value;
       if (!email || !pass) { errorDiv.textContent = 'FIELDS CANNOT BE EMPTY'; return; }
-      try {
-        await auth.signInWithEmailAndPassword(email, pass);
+      errorDiv.textContent = 'LOGGING IN...';
+
+      const res = await localAuthRequest('/api/login', { email, password: pass });
+      if (res.success) {
         authOverlay.style.display = 'none';
-      } catch (err) {
-        errorDiv.textContent = err.message.toUpperCase();
+        localStorage.setItem('knockout_user', email);
+      } else {
+        errorDiv.textContent = res.message.toUpperCase();
       }
     });
 
@@ -2740,13 +2738,10 @@
       authOverlay.style.display = 'none';
     });
 
-    // Check if user is already logged in
-    auth.onAuthStateChanged((user) => {
-      if (user) {
-        authOverlay.style.display = 'none';
-        console.log('Logged in as:', user.email);
-      }
-    });
+    // Check session
+    if (localStorage.getItem('knockout_user')) {
+      authOverlay.style.display = 'none';
+    }
   </script>
 </body>
 

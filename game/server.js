@@ -19,8 +19,62 @@ const MIME = {
     '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
 };
 
-// Simple HTTP server to serve game files
+// Simple JSON "database" path
+const USERS_FILE = path.join(GAME_DIR, 'users.json');
+if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify([]));
+
+// Simple HTTP server to serve game files and API
 const server = http.createServer((req, res) => {
+    // API Endpoints
+    if (req.url === '/api/register' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { email, password } = JSON.parse(body);
+                if (!email || !password) throw new Error('MISSING FIELDS');
+                if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) throw new Error('INVALID EMAIL');
+
+                const users = JSON.parse(fs.readFileSync(USERS_FILE));
+                if (users.length >= 100) throw new Error('ACCOUNT LIMIT REACHED (MAX 100)');
+                if (users.find(u => u.email === email)) throw new Error('EMAIL ALREADY REGISTERED');
+
+                users.push({ email, password, created: Date.now(), wins: 0, losses: 0 });
+                fs.writeFileSync(USERS_FILE, JSON.stringify(users));
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+        });
+        return;
+    }
+
+    if (req.url === '/api/login' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { email, password } = JSON.parse(body);
+                const users = JSON.parse(fs.readFileSync(USERS_FILE));
+                const user = users.find(u => u.email === email && u.password === password);
+
+                if (user) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, user: { email: user.email } }));
+                } else {
+                    throw new Error('INVALID CREDENTIALS');
+                }
+            } catch (err) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, message: err.message }));
+            }
+        });
+        return;
+    }
+
     let filePath = path.join(GAME_DIR, req.url === '/' ? 'index.html' : req.url);
     const ext = path.extname(filePath).toLowerCase();
     const mime = MIME[ext] || 'application/octet-stream';
