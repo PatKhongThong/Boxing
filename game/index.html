@@ -420,6 +420,7 @@
     let ropeVibrationL = 0, ropeVibrationR = 0; // rope vibration amplitude
     let cameraFlashTimer = 0;
     let victoryTimer = 0;
+    let isTestMode = false; // Training dummy mode for Chester
 
     // ── Input ──
     const keys = {};
@@ -761,10 +762,8 @@
           if (progress < 0.3) this.punchArmExt = progress / 0.3;
           else if (progress > 0.7) this.punchArmExt = (1 - progress) / 0.3;
           else this.punchArmExt = 1;
-
           if (this.attackTimer <= 0) {
             if (this.barrageHits > 0) {
-              // Fire next barrage hit immediately
               this.barrageHits--;
               this.attackTimer = this.currentPunch.dur * 0.25;
               this.hitRegistered = false;
@@ -1307,6 +1306,7 @@
       gameState = 'FIGHTING';
     }
     function startGame() {
+      isTestMode = false;
       roundNumber = 1;
       if (player) player.score = 0;
       if (enemy) enemy.score = 0;
@@ -1316,6 +1316,27 @@
         remoteGameState = null;
       }
       resetRound();
+    }
+
+    function startTestMode() {
+      isTestMode = true; isOnlineMode = false;
+      roundNumber = 1;
+      // Create player as Chester
+      resetFighters();
+      // Override enemy as a training dummy
+      enemy.name = 'DUMMY';
+      enemy.hp = 99999; enemy.maxHp = 99999;
+      enemy.speed = 0; enemy.dmgMult = 0;
+      enemy.staminaRegen = 0;
+      enemy.colors = { main: '#555', dark: '#333', skin: '#888', glove: '#666', skinShd: '#666', hair: '#444', shoe: '#333', trim: '#555' };
+      roundTimer = 999; roundTimerAccum = 0;
+      particles = []; floatingTexts = [];
+      flashAlpha = 0; freezeFrames = 0; shakeDur = 0;
+      comboCount = 0; comboTimer = 0;
+      slowMoTimer = 0; slowMoScale = 1;
+      ropeVibrationL = 0; ropeVibrationR = 0;
+      victoryTimer = 0;
+      gameState = 'FIGHTING';
     }
 
     // ── Smart AI Controller ──
@@ -1491,7 +1512,7 @@
         const hitY = hb.y + hb.h / 2;
         const headZone = victim.headY + 5;
         let dmg = attacker.currentPunch.dmg * (attacker.dmgMult || 1);
-        if (attacker.isCluckFury) dmg *= 9.0; // 2x Damage buff during Cluck Fury
+        if (attacker.isCluckFury) dmg *= 5.0; // 5x Damage buff during Cluck Fury
         let isHead = hitY < headZone && !attacker.currentPunch.bodyShot;
         if (isHead) dmg *= attacker.currentPunch.headMult;
 
@@ -1870,7 +1891,11 @@
       const instY = H - 35;
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, instY - 20, W, 40);
       ctx.fillStyle = '#aaa'; ctx.font = '600 13px "Outfit"';
-      ctx.fillText('WASD MOVE  •  LMB/ERQF PUNCH  •  S BLOCK  •  SPACE JUMP', W / 2, instY + 5);
+      if (CHARACTERS[selectedCharIdx] && CHARACTERS[selectedCharIdx].name === 'CHESTER') {
+        ctx.fillText('WASD MOVE • LMB JAB (BARRAGE) • ERQF PUNCH • S BLOCK • SPACE JUMP • Q CLUCK FURY', W / 2, instY + 5);
+      } else {
+        ctx.fillText('WASD MOVE  •  LMB/ERQF PUNCH  •  S BLOCK  •  SPACE JUMP', W / 2, instY + 5);
+      }
 
       drawVignette(ctx);
     }
@@ -2067,6 +2092,24 @@
       // Store button region for click detection
       charSelectBtnRegion = { x: btnX, y: btnY, w: btnW, h: btnH };
 
+      // Test Mode button (Chester only) — draw ABOVE START FIGHT
+      const isChester = CHARACTERS[selectedCharIdx] && CHARACTERS[selectedCharIdx].name === 'CHESTER';
+      if (isChester && !isOnlineMode) {
+        const tbW = 140, tbH = 22;
+        const tbX = W / 2 - tbW / 2, tbY = btnY - tbH - 10;
+        const pulse = 0.7 + Math.sin(performance.now() * 0.005) * 0.3;
+        ctx.save();
+        ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 12 * pulse;
+        ctx.fillStyle = `rgba(200, 0, 0, ${pulse})`; ctx.fillRect(tbX, tbY, tbW, tbH);
+        ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.strokeRect(tbX, tbY, tbW, tbH);
+        ctx.restore();
+        ctx.fillStyle = '#fff'; ctx.font = '700 9px "Press Start 2P"'; ctx.textAlign = 'center';
+        ctx.fillText('⚡ TEST MODE ⚡', W / 2, tbY + 15);
+        charSelectTestBtnRegion = { x: tbX, y: tbY, w: tbW, h: tbH };
+      } else {
+        charSelectTestBtnRegion = null;
+      }
+
       drawVignette(ctx);
       ctx.restore();
 
@@ -2085,6 +2128,7 @@
     // Click regions for character select
     let charHoverIdx = -1;
     let charSelectBtnRegion = null;
+    let charSelectTestBtnRegion = null;
 
     function drawKO(ctx) {
       ctx.save();
@@ -2251,9 +2295,14 @@
           applyGuestInput(enemy, PM.lastGuestInput);
         }
 
-        // AI logic (Offline or Host vs AI)
-        if (!isOnlineMode) {
+        // AI logic (Offline or Host vs AI) — skip in test mode
+        if (!isOnlineMode && !isTestMode) {
           AI.update(dt, enemy, player);
+        }
+
+        // Test mode: keep dummy at max HP
+        if (isTestMode) {
+          enemy.hp = enemy.maxHp;
         }
 
         // Common Simulation (Movement, Facing, Hitbox update)
@@ -2665,6 +2714,13 @@
           } else {
             startGame();
           }
+        }
+      }
+      // Check test mode button click
+      if (charSelectTestBtnRegion) {
+        const tb = charSelectTestBtnRegion;
+        if (mx >= tb.x && mx <= tb.x + tb.w && my >= tb.y && my <= tb.y + tb.h) {
+          startTestMode();
         }
       }
     });
