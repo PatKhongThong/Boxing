@@ -568,6 +568,20 @@
           skinShd: '#663311', hair: '#ff6600', shoe: '#111', trim: '#ffcc00'
         },
         statBars: { SPD: 4, PWR: 4, HP: 4, STA: 2, DEF: 3 }
+      },
+      {
+        name: 'CHESTER',
+        title: 'THE CHICKEN',
+        desc: 'Fear the feathers. Deals massive damage to unlock Cluck Fury.',
+        hp: 100, stamina: 110, speed: 4.0, retreatMod: 0.9, jumpForce: -10, blockDmgReduction: 0.65,
+        dmgMult: 1.0, staminaRegen: 15,
+        bodyScale: 1.0, headSize: 1.0, armThick: 4, legThick: 4,
+        hairStyle: 'chicken', // custom style
+        colors: {
+          main: '#ffffff', dark: '#dddddd', skin: '#ff8800', glove: '#ff2222',
+          skinShd: '#cc6600', hair: '#ff2222', shoe: '#000000', trim: '#ffcc00'
+        },
+        statBars: { SPD: 4, PWR: 3, HP: 3, STA: 4, DEF: 3 }
       }
     ];
 
@@ -624,6 +638,11 @@
         // Mouse aim offset for player (vertical glove target)
         this.aimY = 0; // -1 = head, 0 = mid, 1 = body
         this.mouseAimAngle = 0; // angle from shoulder to mouse cursor
+
+        // Chester Ability state
+        this.abilityCharge = 0;
+        this.isCluckFury = false;
+        this.cluckFuryTimer = 0;
       }
 
       get centerX() { return this.x; }
@@ -637,7 +656,19 @@
         this.breathPhase += dt * 2.5;
 
         // Stun timer
-        if (this.stunTimer > 0) { this.stunTimer -= dt; this.attacking = false; }
+        if (this.stunTimer > 0 && !this.isCluckFury) { this.stunTimer -= dt; this.attacking = false; }
+        else if (this.isCluckFury) { this.stunTimer = 0; }
+
+        // Cluck Fury logic
+        if (this.isCluckFury) {
+          this.cluckFuryTimer -= dt;
+          if (this.cluckFuryTimer <= 0) {
+            this.isCluckFury = false;
+          }
+          // Superhuman effects
+          this.stamina = Math.min(this.maxStamina, this.stamina + 50 * dt); // fast regen
+          this.attackCooldown = 0; // zero cooldown
+        }
 
         // Stagger at low HP
         if (this.hp / this.maxHp < 0.25) {
@@ -817,6 +848,11 @@
           const col = isHead ? '#ffff44' : (punch && punch.bodyShot ? '#44aaff' : '#ff8844');
           spawnFloatingText(this.x + (Math.random() - 0.5) * 20, this.headY - 15, Math.round(finalDmg).toString(), col);
         }
+
+        // Ability charging (for Chester)
+        if (this.name === 'CHESTER' && !this.isCluckFury) {
+          this.abilityCharge = Math.min(100, this.abilityCharge + finalDmg * 0.8);
+        }
       }
 
       draw(ctx) {
@@ -829,6 +865,18 @@
         const punchLeanY = this.currentPunch ? this.currentPunch.leanY * this.punchArmExt : 0;
         const lx = lean + punchLean; // combined lean X
         const ly = punchLeanY;       // combined lean Y
+
+        // Aura for Cluck Fury
+        if (this.isCluckFury) {
+          ctx.save();
+          ctx.globalAlpha = 0.4 + Math.sin(now * 0.01) * 0.2;
+          ctx.shadowBlur = 20; ctx.shadowColor = '#fff700';
+          ctx.strokeStyle = '#fff700'; ctx.lineWidth = 15 * s;
+          ctx.beginPath();
+          ctx.ellipse(lx, -30 * s + bob + ly, 20 * s, 40 * s, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
 
         const sk = flash ? '#fff' : this.colors.skin;
         const skShd = flash ? '#ddd' : (this.colors.skinShd || this.colors.skin);
@@ -975,17 +1023,36 @@
           ctx.beginPath(); ctx.ellipse(ex - f * 4 * s, ey - 4 * s, 4 * s, 2 * s, Math.PI * 0.25, 0, Math.PI * 2); ctx.fill();
         };
 
+        const drawWingArm = (sx, sy, ex, ey, thick, isBack) => {
+          // Chicken wings instead of arms
+          ctx.strokeStyle = isBack ? skShd : sk; ctx.lineWidth = thick;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          const cpX = (sx + ex) * 0.5 - f * 20 * s;
+          ctx.quadraticCurveTo(cpX, (sy + ey) * 0.5, ex, ey);
+          ctx.stroke();
+
+          // Feather details
+          ctx.fillStyle = isBack ? skShd : sk;
+          for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.ellipse(ex - f * (i * 4 * s), ey, 8 * s, 4 * s, Math.PI * 0.5 - f * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        };
+
         const isIdle = this.isPlayer && !this.attacking && !this.blocking && !this.isStunned;
+        const armDrawer = this.name === 'CHESTER' ? drawWingArm : drawHighFidArm;
         if (isIdle) {
           const angle = this.mouseAimAngle;
           const aL = 35 * s;
           const ax = Math.cos(angle) * aL, ay = Math.sin(angle) * aL;
-          drawHighFidArm(sLX, sY, sLX + ax * 0.9, sY + ay * 0.9, ARM_T - 0.5, true);
-          drawHighFidArm(sRX, sY, sRX + ax, sY + ay, ARM_T, false);
+          armDrawer(sLX, sY, sLX + ax * 0.9, sY + ay * 0.9, ARM_T - 0.5, true);
+          armDrawer(sRX, sY, sRX + ax, sY + ay, ARM_T, false);
         } else {
           // Back Arm
           const beX = tx - f * 18 * s, beY = ty - th + 10 * s + (this.blocking ? -12 * s : 0);
-          drawHighFidArm(sLX, sY, beX, beY, ARM_T - 0.5, true);
+          armDrawer(sLX, sY, beX, beY, ARM_T - 0.5, true);
           // Front Arm
           let feX = tx + f * 18 * s, feY = ty - th + 12 * s;
           if (this.attacking && this.currentPunch) {
@@ -996,7 +1063,7 @@
           }
           if (this.blocking) { feX = tx + f * 10 * s; feY = ty - th - 5 * s; }
           if (this.isStunned) { feX += Math.sin(now * 0.02) * 6; feY += Math.cos(now * 0.015) * 4; }
-          drawHighFidArm(sRX, sY, feX, feY, ARM_T, false);
+          armDrawer(sRX, sY, feX, feY, ARM_T, false);
         }
 
         // ── Head (Detailed) ──
@@ -1028,6 +1095,30 @@
           } else if (this.hairStyle === 'bald') {
             ctx.fillStyle = 'rgba(255,255,255,0.15)';
             ctx.beginPath(); ctx.arc(hX - 3 * s, hY - 5 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
+          } else if (this.hairStyle === 'chicken') {
+            // Red Comb
+            ctx.fillStyle = '#ff2222';
+            for (let i = 0; i < 3; i++) {
+              ctx.beginPath();
+              ctx.arc(hX - 4 * s + i * 5 * s, hY - hRad - 2 * s, 4 * s, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            // Beak (Orange)
+            ctx.fillStyle = '#ffcc00';
+            ctx.beginPath();
+            ctx.moveTo(hX + f * hRad, hY);
+            ctx.lineTo(hX + f * (hRad + 12 * s), hY + 4 * s);
+            ctx.lineTo(hX + f * hRad, hY + 8 * s);
+            ctx.closePath();
+            ctx.fill();
+            // Beak bottom
+            ctx.fillStyle = '#ccaa00';
+            ctx.beginPath();
+            ctx.moveTo(hX + f * hRad, hY + 4 * s);
+            ctx.lineTo(hX + f * (hRad + 8 * s), hY + 8 * s);
+            ctx.lineTo(hX + f * hRad, hY + 10 * s);
+            ctx.closePath();
+            ctx.fill();
           }
 
           // Eyes
@@ -1569,6 +1660,21 @@
       ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
       ctx.fillText(Math.ceil(roundTimer).toString(), W / 2, 90);
       ctx.shadowBlur = 0;
+
+      // Ability Charge Bar (Only for Chester)
+      [leftBoxer, rightBoxer].forEach((b, i) => {
+        if (b.name === 'CHESTER') {
+          const sideW = 120, sideH = 6;
+          const sx = i === 0 ? margin : W - margin - sideW;
+          const sy = 65;
+          ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(sx, sy, sideW, sideH);
+          ctx.fillStyle = b.abilityCharge >= 100 ? '#fff700' : '#ffcc00';
+          ctx.fillRect(sx, sy, (b.abilityCharge / 100) * sideW, sideH);
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(sx, sy, sideW, sideH);
+          ctx.fillStyle = '#fff'; ctx.font = '600 8px "Outfit"'; ctx.textAlign = i === 0 ? 'left' : 'right';
+          ctx.fillText(b.abilityCharge >= 100 ? 'Q - READY!' : 'CLUCK FURY', i === 0 ? sx : sx + sideW, sy - 4);
+        }
+      });
     }
 
     function drawBar(ctx, x, y, w, h, val, max, color, align) {
@@ -2232,6 +2338,13 @@
         if (inp.ac.upper > lastHostActionCounts.upper) boxer.punch('uppercut');
         if (inp.ac.body > lastHostActionCounts.body) boxer.punch('bodyshot');
         if (inp.ac.dash > lastHostActionCounts.dash) boxer.punch('dashpunch');
+        if (inp.ac.ability > lastHostActionCounts.ability) {
+          if (boxer.name === 'CHESTER' && boxer.abilityCharge >= 100) {
+            boxer.isCluckFury = true; boxer.cluckFuryTimer = 8; boxer.abilityCharge = 0;
+            spawnFloatingText(boxer.x, boxer.headY - 40, 'CLUCK FURY!', '#fff700');
+            boostCrowdExcitement(0.5);
+          }
+        }
         lastHostActionCounts = Object.assign({}, inp.ac);
       }
     }
@@ -2355,6 +2468,16 @@
           startGame();
         }
         e.preventDefault();
+      }
+
+      // Ability activation (Q)
+      if (gameState === 'FIGHTING' && e.code === 'KeyQ' && player.name === 'CHESTER' && player.abilityCharge >= 100 && !player.isCluckFury) {
+        player.isCluckFury = true;
+        player.cluckFuryTimer = 8;
+        player.abilityCharge = 0;
+        spawnFloatingText(player.x, player.headY - 40, 'CLUCK FURY!', '#fff700');
+        boostCrowdExcitement(0.5);
+        if (isOnlineMode) PM.sendInput({ type: 'ability_activation' }); // simple sync for now
       }
     });
     document.getElementById('btn-make-party').addEventListener('click', async () => {
