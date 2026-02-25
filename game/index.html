@@ -209,58 +209,6 @@
       font-weight: 700;
     }
 
-    /* Auth Overlay */
-    #auth-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #050508;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 100;
-    }
-
-    #auth-box {
-      background: rgba(10, 5, 20, 0.94);
-      border: 2px solid #55aaff;
-      padding: 32px;
-      width: 320px;
-      text-align: center;
-      box-shadow: 0 0 50px rgba(85, 170, 255, 0.2);
-    }
-
-    #auth-box h2 {
-      color: #55aaff;
-      font-size: 24px;
-      font-weight: 900;
-      margin-bottom: 20px;
-      letter-spacing: 2px;
-    }
-
-    .auth-input {
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 15px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: #fff;
-      font-family: 'Inter', sans-serif;
-      outline: none;
-      -webkit-user-select: text;
-      user-select: text;
-      cursor: text;
-    }
-
-    #auth-error {
-      color: #ff4444;
-      font-size: 11px;
-      margin-bottom: 15px;
-      min-height: 15px;
-    }
-
     .auth-btn {
       width: 100%;
       padding: 12px;
@@ -271,22 +219,43 @@
       margin-bottom: 10px;
     }
 
-    #btn-login {
-      background: #55aaff;
+    #redeem-section {
+      width: 100%;
+      margin-top: 5px;
+      padding-top: 15px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    #redeem-email {
+      width: 100%;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       color: #fff;
-    }
-
-    #btn-register {
-      background: #2a1a30;
-      color: #55aaff;
-      border: 1px solid #55aaff;
-    }
-
-    #btn-guest {
-      background: transparent;
-      color: #aaa;
+      font-family: 'Inter', sans-serif;
       font-size: 12px;
-      margin-top: 10px;
+      outline: none;
+      text-align: center;
+    }
+
+    #btn-redeem {
+      background: #ffdd44;
+      color: #000;
+      font-weight: 900;
+      font-size: 11px;
+      border: none;
+      padding: 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+
+    #btn-redeem:hover {
+      background: #fff;
+      box-shadow: 0 0 15px rgba(255, 221, 68, 0.4);
     }
 
     .waiting-code {
@@ -368,18 +337,7 @@
       style="color:#777; font-size:8px; text-align:center; margin-bottom:8px; letter-spacing:1px; font-family:'Press Start 2P',monospace;">
       Made by Phat Khongthong from GIS AND I AM NOT GOING TO SING IN MATH CLASS AGAIN :)</div>
     <div id="wrapper">
-      <!-- Auth Overlay -->
-      <div id="auth-overlay">
-        <div id="auth-box">
-          <h2>KNOCKOUT!</h2>
-          <input type="email" id="auth-email" class="auth-input" placeholder="EMAIL (GMAIL PREFERRED)">
-          <input type="password" id="auth-password" class="auth-input" placeholder="PASSWORD">
-          <div id="auth-error"></div>
-          <button id="btn-login" class="auth-btn">SIGN IN</button>
-          <button id="btn-register" class="auth-btn">REGISTER</button>
-          <button id="btn-guest" class="auth-btn">PLAY WITHOUT SIGN IN</button>
-        </div>
-      </div>
+      <!-- No Auth Overlay needed now! -->
 
       <canvas id="game" width="640" height="400"></canvas>
       <div id="scanlines"></div>
@@ -392,6 +350,13 @@
           <button class="party-btn" id="btn-join-party">JOIN ROOM</button>
           <button class="party-btn" id="btn-vs-cpu">VS CPU</button>
           <div id="party-status"></div>
+
+          <div id="redeem-section">
+            <div style="font-size: 9px; color: #888; margin-bottom: 5px; text-transform: uppercase;">Exclusive Character
+              Redeem</div>
+            <input type="email" id="redeem-email" placeholder="ENTER YOUR EMAIL" autocomplete="off">
+            <button id="btn-redeem">UNLOCK CONTENT</button>
+          </div>
         </div>
         <div id="waiting-screen" style="display:none">
           <div class="waiting-text">WAITING FOR OPPONENT...</div>
@@ -2802,100 +2767,44 @@
     PM.init();
     resetFighters();
     requestAnimationFrame(gameLoop);
-    // ── Local Authentication ──
-    const authOverlay = document.getElementById('auth-overlay');
-    const btnLogin = document.getElementById('btn-login');
-    const btnRegister = document.getElementById('btn-register');
-    const btnGuest = document.getElementById('btn-guest');
-    const emailInput = document.getElementById('auth-email');
-    const passInput = document.getElementById('auth-password');
-    const errorDiv = document.getElementById('auth-error');
 
-    // Redundant safety: stop propagation on all auth/party inputs
-    [emailInput, passInput, document.getElementById('party-password')].forEach(el => {
-      if (!el) return;
-      el.addEventListener('keydown', e => e.stopPropagation());
-      el.addEventListener('keyup', e => e.stopPropagation());
-    });
+    // ── Exclusive Content Redemption ──
+    const redeemEmailInput = document.getElementById('redeem-email');
+    const btnRedeem = document.getElementById('btn-redeem');
+    const partyStatus = document.getElementById('party-status');
 
-    async function localAuthRequest(endpoint, data) {
-      // Option 2: Pure Local Account System (No Server Required)
-      try {
-        // Use local storage to simulate a accounts database
-        const ACCOUNTS_KEY = 'knockout_accounts';
-        let accounts = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '[]');
+    // Stop propagation so typing in redeem box doesn't trigger game keys
+    redeemEmailInput.addEventListener('keydown', e => e.stopPropagation());
+    redeemEmailInput.addEventListener('keyup', e => e.stopPropagation());
 
-        if (endpoint === '/api/register') {
-          const { email, password } = data;
-          if (!email || !password) return { success: false, message: 'FIELDS CANNOT BE EMPTY' };
-          if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) return { success: false, message: 'INVALID EMAIL FORMAT' };
-
-          if (accounts.find(a => a.email.toLowerCase() === email.toLowerCase())) {
-            return { success: false, message: 'EMAIL ALREADY REGISTERED' };
-          }
-
-          accounts.push({ email: email.toLowerCase(), password });
-          localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
-          return { success: true };
-        }
-
-        if (endpoint === '/api/login') {
-          const { email, password } = data;
-          const user = accounts.find(a => a.email.toLowerCase() === email.toLowerCase() && a.password === password);
-          if (user) {
-            return { success: true, user: { email: user.email } };
-          } else {
-            return { success: false, message: 'INVALID EMAIL OR PASSWORD' };
-          }
-        }
-
-        return { success: false, message: 'UNKNOWN ENDPOINT' };
-      } catch (err) {
-        console.error('Local Auth Error:', err);
-        return { success: false, message: 'LOCAL STORAGE ERROR' };
+    btnRedeem.addEventListener('click', () => {
+      const email = redeemEmailInput.value.trim().toLowerCase();
+      if (!email) {
+        partyStatus.style.color = '#ff4444';
+        partyStatus.textContent = 'ENTER AN EMAIL';
+        return;
       }
-    }
-
-    btnRegister.addEventListener('click', async () => {
-      const email = emailInput.value;
-      const pass = passInput.value;
-      errorDiv.textContent = 'REGISTERING...';
-
-      const res = await localAuthRequest('/api/register', { email, password: pass });
-      if (res.success) {
-        authOverlay.style.display = 'none';
-        localStorage.setItem('knockout_user', email.toLowerCase());
-      } else {
-        errorDiv.textContent = res.message.toUpperCase();
+      if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        partyStatus.style.color = '#ff4444';
+        partyStatus.textContent = 'INVALID EMAIL FORMAT';
+        return;
       }
+
+      // Save as the current user
+      localStorage.setItem('knockout_user', email);
+      partyStatus.style.color = '#44ff44';
+      partyStatus.textContent = 'SUCCESS! CONTENT UNLOCKED';
+
+      // Visual feedback: clear input
+      redeemEmailInput.value = '';
+
+      setTimeout(() => {
+        partyStatus.style.color = '#ff4444';
+        partyStatus.textContent = '';
+      }, 3000);
     });
 
-    btnLogin.addEventListener('click', async () => {
-      const email = emailInput.value;
-      const pass = passInput.value;
-      if (!email || !pass) { errorDiv.textContent = 'FIELDS CANNOT BE EMPTY'; return; }
-      errorDiv.textContent = 'LOGGING IN...';
 
-      const res = await localAuthRequest('/api/login', { email, password: pass });
-      if (res.success) {
-        authOverlay.style.display = 'none';
-        localStorage.setItem('knockout_user', email.toLowerCase());
-      } else {
-        errorDiv.textContent = res.message.toUpperCase();
-      }
-    });
-
-    btnGuest.addEventListener('click', () => {
-      authOverlay.style.display = 'none';
-    });
-
-    // Check session
-    if (localStorage.getItem('knockout_user')) {
-      authOverlay.style.display = 'none';
-    } else {
-      // Auto-focus email for convenience
-      setTimeout(() => emailInput.focus(), 500);
-    }
   </script>
 </body>
 
