@@ -1760,13 +1760,27 @@
       drawGlassPanel(W - margin + 10, 15, barW + 20, 75, 'right');
 
       drawBar(ctx, margin, 35, barW, barH, leftBoxer.hp, leftBoxer.maxHp, hpColor(leftBoxer.hp, leftBoxer.maxHp), 'left');
-      drawBar(ctx, margin, 52, barW * 0.7, 5, leftBoxer.stamina, leftBoxer.maxStamina, C.gold, 'left');
+      drawBar(ctx, margin, 52, barW * 0.7, 5, leftBoxer.stamina, leftBoxer.stamina, C.gold, 'left');
       drawName(ctx, margin, 75, leftBoxer.name, (leftBoxer === player ? C.p1 : C.p2), 'left');
+
+      // Display Email
+      if (isOnlineMode) {
+        const leftEmail = PM.isHost ? PM.userEmail : PM.enemyEmail;
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '500 10px "Outfit"'; ctx.textAlign = 'left';
+        ctx.fillText(leftEmail, margin, 28);
+      }
 
       const p2x = W - margin;
       drawBar(ctx, p2x, 35, barW, barH, rightBoxer.hp, rightBoxer.maxHp, hpColor(rightBoxer.hp, rightBoxer.maxHp), 'right');
-      drawBar(ctx, p2x, 52, barW * 0.7, 5, rightBoxer.stamina, rightBoxer.maxStamina, C.gold, 'right');
+      drawBar(ctx, p2x, 52, barW * 0.7, 5, rightBoxer.stamina, rightBoxer.stamina, C.gold, 'right');
       drawName(ctx, p2x, 75, rightBoxer.name, (rightBoxer === player ? C.p1 : C.p2), 'right');
+
+      // Display Email
+      if (isOnlineMode) {
+        const rightEmail = PM.isHost ? PM.enemyEmail : PM.userEmail;
+        ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '500 10px "Outfit"'; ctx.textAlign = 'right';
+        ctx.fillText(rightEmail, p2x, 28);
+      }
 
       // Center Clock
       ctx.fillStyle = '#fff'; ctx.font = '900 22px "Outfit"'; ctx.textAlign = 'center';
@@ -2317,55 +2331,67 @@
     }
 
     // ── Party Manager (PeerJS ─ no server needed!) ──
+    // ── Party Manager (PeerJS ─ no server needed!) ──
     const PM = {
       peer: null, conn: null, isHost: false,
       lastGuestInput: {}, connected: false,
       syncInterval: null,
-      enemyCharIdx: 0, enemyReady: false, playerReady: false,
+      enemyCharIdx: 0,
+      enemyReady: false,
+      playerReady: false,
+      userEmail: '',
+      enemyEmail: '',
 
-      init() { /* PeerJS needs no init */ },
+      init() {
+        this.peer = new Peer();
+        this.peer.on('open', (id) => { console.log('My Peer ID:', id); });
+        this.peer.on('connection', (c) => this.handleIncoming(c));
+      },
+
+      handleIncoming(c) {
+        if (this.conn) { c.close(); return; }
+        this.conn = c;
+        this.isHost = true;
+        this.setupConn();
+
+        const user = localStorage.getItem('knockout_user');
+        this.userEmail = user || 'GUEST';
+
+        this.conn.on('open', () => {
+          this.connected = true;
+          this.conn.send({
+            type: 'welcome',
+            charIdx: selectedCharIdx,
+            email: this.userEmail
+          });
+          startOnlineGame();
+          // Host: sync state to guest
+          this.syncInterval = setInterval(() => {
+            if ((gameState === 'FIGHTING' || gameState === 'KO') && this.conn && this.conn.open) {
+              this.sendGameState(serializeGameState());
+            }
+          }, 50);
+        });
+      },
 
       async createParty(pw) {
         if (!pw.trim()) { setStatus('ENTER A ROOM CODE'); return false; }
-        const roomId = 'knockout_' + pw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const roomId = 'knockout-party-' + pw.trim().toLowerCase();
         setStatus('CREATING ROOM...');
+
+        // Destroy old peer if exists
+        if (this.peer) this.peer.destroy();
 
         return new Promise((resolve) => {
           this.peer = new Peer(roomId);
           this.isHost = true;
 
           this.peer.on('open', () => {
-            setStatus('ROOM CREATED! WAITING FOR OPPONENT...');
-            // Wait for someone to connect
-            this.peer.on('connection', (conn) => {
-              this.conn = conn;
-              this.connected = true;
-              conn.on('open', () => {
-                startOnlineGame();
-                this.conn.send({ type: 'char_update', idx: selectedCharIdx });
-              });
-              conn.on('data', (data) => {
-                if (data.type === 'input') this.lastGuestInput = data.data;
-                if (data.type === 'char_update') { this.enemyCharIdx = data.idx; }
-                if (data.type === 'ready') { this.enemyReady = data.ready; }
-              });
-              conn.on('close', () => {
-                this.connected = false;
-                isOnlineMode = false;
-                gameState = 'DISCONNECTED';
-                document.getElementById('disconnect-msg').style.display = 'block';
-                if (this.syncInterval) { clearInterval(this.syncInterval); this.syncInterval = null; }
-              });
-
-              // Start syncing game state to guest
-              this.syncInterval = setInterval(() => {
-                if ((gameState === 'FIGHTING' || gameState === 'KO') && this.conn) {
-                  this.sendGameState(serializeGameState());
-                }
-              }, 50);
-            });
+            setStatus('ROOM: ' + pw.toUpperCase());
             resolve(true);
           });
+
+          this.peer.on('connection', (c) => this.handleIncoming(c));
 
           this.peer.on('error', (err) => {
             if (err.type === 'unavailable-id') {
@@ -2380,37 +2406,34 @@
 
       async joinParty(pw) {
         if (!pw.trim()) { setStatus('ENTER A ROOM CODE'); return false; }
-        const roomId = 'knockout_' + pw.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const targetId = 'knockout-party-' + pw.trim().toLowerCase();
         setStatus('CONNECTING...');
 
+        if (this.peer) this.peer.destroy();
+
         return new Promise((resolve) => {
-          this.peer = new Peer();
+          this.peer = new Peer(); // Guest gets random ID
           this.isHost = false;
 
           this.peer.on('open', () => {
-            this.conn = this.peer.connect(roomId, { reliable: true });
+            this.conn = this.peer.connect(targetId, { reliable: true });
+            this.setupConn();
+
+            const user = localStorage.getItem('knockout_user');
+            this.userEmail = user || 'GUEST';
 
             this.conn.on('open', () => {
               this.connected = true;
               startOnlineGame();
-              this.conn.send({ type: 'char_update', idx: selectedCharIdx });
+              this.conn.send({
+                type: 'greet',
+                charIdx: selectedCharIdx,
+                email: this.userEmail
+              });
               resolve(true);
             });
 
-            this.conn.on('data', (data) => {
-              if (data.type === 'state') remoteGameState = data.data;
-              if (data.type === 'char_update') { this.enemyCharIdx = data.idx; }
-              if (data.type === 'ready') { this.enemyReady = data.ready; }
-            });
-
-            this.conn.on('close', () => {
-              this.connected = false;
-              isOnlineMode = false;
-              gameState = 'DISCONNECTED';
-              document.getElementById('disconnect-msg').style.display = 'block';
-            });
-
-            // Timeout if no connection
+            // Timeout
             setTimeout(() => {
               if (!this.connected) {
                 setStatus('ROOM NOT FOUND — CHECK THE CODE');
@@ -2426,22 +2449,54 @@
         });
       },
 
+      setupConn() {
+        this.conn.on('data', (data) => {
+          if (data.type === 'welcome' || data.type === 'greet') {
+            this.enemyCharIdx = data.charIdx;
+            this.enemyEmail = data.email || 'GUEST';
+            if (data.type === 'greet') {
+              this.conn.send({
+                type: 'welcome',
+                charIdx: selectedCharIdx,
+                email: this.userEmail
+              });
+            }
+          }
+          if (data.type === 'state') remoteGameState = data.data;
+          if (data.type === 'char_update') {
+            this.enemyCharIdx = data.idx;
+            this.enemyEmail = data.email || this.enemyEmail;
+          }
+          if (data.type === 'ready') this.enemyReady = data.ready;
+          if (data.type === 'input') {
+            // Guest input for Host to apply
+            this.lastGuestInput = data.data;
+          }
+          if (data.type === 'disconnect') this.leave();
+        });
+
+        this.conn.on('close', () => this.leave());
+      },
+
       sendInput(inp) {
         if (this.conn && this.conn.open && !this.isHost) {
           this.conn.send({ type: 'input', data: inp });
         }
       },
+
       sendGameState(s) {
         if (this.conn && this.conn.open && this.isHost) {
           this.conn.send({ type: 'state', data: s });
         }
       },
+
       leave() {
         if (this.syncInterval) { clearInterval(this.syncInterval); this.syncInterval = null; }
         if (this.conn) { this.conn.close(); this.conn = null; }
         if (this.peer) { this.peer.destroy(); this.peer = null; }
         this.isHost = false; this.connected = false;
         this.lastGuestInput = {}; isOnlineMode = false; remoteGameState = null;
+        this.enemyEmail = '';
       }
     };
 
@@ -2764,31 +2819,40 @@
     });
 
     async function localAuthRequest(endpoint, data) {
+      // Option 2: Pure Local Account System (No Server Required)
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        // Use local storage to simulate a accounts database
+        const ACCOUNTS_KEY = 'knockout_accounts';
+        let accounts = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '[]');
 
-        // Try to connect to the current origin or localhost:3000
-        const baseUrl = window.location.origin.includes(':3000') ? '' : 'http://localhost:3000';
-        const url = endpoint.startsWith('http') ? endpoint : baseUrl + endpoint;
+        if (endpoint === '/api/register') {
+          const { email, password } = data;
+          if (!email || !password) return { success: false, message: 'FIELDS CANNOT BE EMPTY' };
+          if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) return { success: false, message: 'INVALID EMAIL FORMAT' };
 
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        if (!res.ok) {
-          if (res.status === 404) return { success: false, message: 'API 404: SERVER IS NOT RUNNING ON PORT 3000 OR WRONG URL' };
-          const err = await res.json().catch(() => ({ message: 'SERVER RETURNED ' + res.status }));
-          return { success: false, message: (err.message || 'API ERROR').toUpperCase() };
+          if (accounts.find(a => a.email.toLowerCase() === email.toLowerCase())) {
+            return { success: false, message: 'EMAIL ALREADY REGISTERED' };
+          }
+
+          accounts.push({ email: email.toLowerCase(), password });
+          localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+          return { success: true };
         }
-        return await res.json();
+
+        if (endpoint === '/api/login') {
+          const { email, password } = data;
+          const user = accounts.find(a => a.email.toLowerCase() === email.toLowerCase() && a.password === password);
+          if (user) {
+            return { success: true, user: { email: user.email } };
+          } else {
+            return { success: false, message: 'INVALID EMAIL OR PASSWORD' };
+          }
+        }
+
+        return { success: false, message: 'UNKNOWN ENDPOINT' };
       } catch (err) {
-        if (err.name === 'AbortError') return { success: false, message: 'SERVER TIMEOUT' };
-        console.error('Auth Error:', err);
-        return { success: false, message: 'CONNECTION ERROR: IS THE SERVER RUNNING ON PORT 3000?' };
+        console.error('Local Auth Error:', err);
+        return { success: false, message: 'LOCAL STORAGE ERROR' };
       }
     }
 
@@ -2800,7 +2864,7 @@
       const res = await localAuthRequest('/api/register', { email, password: pass });
       if (res.success) {
         authOverlay.style.display = 'none';
-        localStorage.setItem('knockout_user', email);
+        localStorage.setItem('knockout_user', email.toLowerCase());
       } else {
         errorDiv.textContent = res.message.toUpperCase();
       }
@@ -2815,7 +2879,7 @@
       const res = await localAuthRequest('/api/login', { email, password: pass });
       if (res.success) {
         authOverlay.style.display = 'none';
-        localStorage.setItem('knockout_user', email);
+        localStorage.setItem('knockout_user', email.toLowerCase());
       } else {
         errorDiv.textContent = res.message.toUpperCase();
       }
