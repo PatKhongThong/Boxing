@@ -25,13 +25,28 @@ if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, JSON.stringify([]))
 
 // Simple HTTP server to serve game files and API
 const server = http.createServer((req, res) => {
+    // Log every request to help debug
+    console.log(`[${new Date().toLocaleTimeString()}] ${req.method} ${req.url}`);
+
+    // Parse URL and normalize pathname (remove trailing slashes)
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const pathname = url.pathname.replace(/\/$/, '') || '/';
+    console.log(`[DEBUG] Normalized pathname: ${pathname}`);
+
     // API Endpoints
-    if (req.url === '/api/register' && req.method === 'POST') {
+    if (pathname === '/api/register' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', () => {
             try {
+                // Add CORS headers for local development if accessed from different ports
+                res.setHeader('Access-Control-Allow-Origin', '*');
+                res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+                res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
                 const { email, password } = JSON.parse(body);
+                console.log(`[AUTH] Register attempt: ${email}`);
+
                 if (!email || !password) throw new Error('MISSING FIELDS');
                 if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) throw new Error('INVALID EMAIL');
 
@@ -42,9 +57,11 @@ const server = http.createServer((req, res) => {
                 users.push({ email, password, created: Date.now(), wins: 0, losses: 0 });
                 fs.writeFileSync(USERS_FILE, JSON.stringify(users));
 
+                console.log(`[AUTH] Register success: ${email}`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true }));
             } catch (err) {
+                console.error(`[AUTH] Register error: ${err.message}`);
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, message: err.message }));
             }
@@ -52,22 +69,31 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    if (req.url === '/api/login' && req.method === 'POST') {
+    if (pathname === '/api/login' && req.method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', () => {
             try {
+                // Add CORS headers for local development if accessed from different ports
+                res.setHeader('Access-Control-Allow-Origin', '*');
+                res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+                res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
                 const { email, password } = JSON.parse(body);
+                console.log(`[AUTH] Login attempt: ${email}`);
+
                 const users = JSON.parse(fs.readFileSync(USERS_FILE));
                 const user = users.find(u => u.email === email && u.password === password);
 
                 if (user) {
+                    console.log(`[AUTH] Login success: ${email}`);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true, user: { email: user.email } }));
                 } else {
                     throw new Error('INVALID CREDENTIALS');
                 }
             } catch (err) {
+                console.error(`[AUTH] Login error: ${err.message}`);
                 res.writeHead(401, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, message: err.message }));
             }
@@ -75,7 +101,28 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    let filePath = path.join(GAME_DIR, req.url === '/' ? 'index.html' : req.url);
+    // Handle OPTIONS Preflight for CORS
+    if (req.method === 'OPTIONS') {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
+    // Serve static files
+    let relPath = req.url === '/' ? 'index.html' : req.url;
+    // Strip query strings for file lookup
+    relPath = relPath.split('?')[0];
+    let filePath = path.join(GAME_DIR, relPath);
+
+    // Prevent directory traversal
+    if (!filePath.startsWith(GAME_DIR)) {
+        res.writeHead(403); res.end('Forbidden');
+        return;
+    }
+
     const ext = path.extname(filePath).toLowerCase();
     const mime = MIME[ext] || 'application/octet-stream';
 

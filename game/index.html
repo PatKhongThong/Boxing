@@ -251,6 +251,7 @@
       outline: none;
       -webkit-user-select: text;
       user-select: text;
+      cursor: text;
     }
 
     #auth-error {
@@ -2730,7 +2731,12 @@
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const res = await fetch(endpoint, {
+
+        // Try to connect to the current origin or localhost:3000
+        const baseUrl = window.location.origin.includes(':3000') ? '' : 'http://localhost:3000';
+        const url = endpoint.startsWith('http') ? endpoint : baseUrl + endpoint;
+
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
@@ -2738,13 +2744,15 @@
         });
         clearTimeout(timeoutId);
         if (!res.ok) {
+          if (res.status === 404) return { success: false, message: 'API 404: SERVER IS NOT RUNNING ON PORT 3000 OR WRONG URL' };
           const err = await res.json().catch(() => ({ message: 'SERVER RETURNED ' + res.status }));
           return { success: false, message: (err.message || 'API ERROR').toUpperCase() };
         }
         return await res.json();
       } catch (err) {
         if (err.name === 'AbortError') return { success: false, message: 'SERVER TIMEOUT' };
-        return { success: false, message: 'SERVER IS NOT RUNNING' };
+        console.error('Auth Error:', err);
+        return { success: false, message: 'CONNECTION ERROR: IS THE SERVER RUNNING ON PORT 3000?' };
       }
     }
 
@@ -2784,6 +2792,9 @@
     // Check session
     if (localStorage.getItem('knockout_user')) {
       authOverlay.style.display = 'none';
+    } else {
+      // Auto-focus email for convenience
+      setTimeout(() => emailInput.focus(), 500);
     }
   </script>
 </body>
