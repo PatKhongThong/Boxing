@@ -508,15 +508,12 @@
     let showPartyMenu = false;
     let syncCounter = 0;
     const SYNC_RATE = 4;
-    let remoteGameState = null;
-    let guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
-    let lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
+    let remoteGameState = null,
+      guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 },
+      lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
 
     // ── Character Roster ──
     let selectedCharIdx = 0;
-    let cutsceneActive = false, cutsceneTimer = 0, cutsceneBoxer = null;
-    let cameraZoom = 1.0, cameraTargetX = W / 2, cameraTargetY = H / 2;
-    let cameraX = W / 2, cameraY = H / 2;
     let charSelectScroll = 0;
     let charSelectTargetScroll = 0;
     let charSelectDragging = false;
@@ -670,7 +667,7 @@
       {
         name: 'CHESTER',
         title: 'THE CHICKEN',
-        desc: 'Fear the feathers. Deals massive damage to unlock Cluck Fury.',
+        desc: 'Fear the feathers. Pure speed and power.',
         hp: 200, stamina: 200, speed: 6.0, retreatMod: 1.0, jumpForce: -12, blockDmgReduction: 0.8,
         dmgMult: 1.5, staminaRegen: 30,
         bodyScale: 1.0, headSize: 1.0, armThick: 4, legThick: 4,
@@ -736,11 +733,6 @@
         // Mouse aim offset for player (vertical glove target)
         this.aimY = 0; // -1 = head, 0 = mid, 1 = body
         this.mouseAimAngle = 0; // angle from shoulder to mouse cursor
-
-        // Chester Ability state
-        this.abilityCharge = 0;
-        this.isCluckFury = false;
-        this.cluckFuryTimer = 0;
       }
 
       get centerX() { return this.x; }
@@ -754,19 +746,7 @@
         this.breathPhase += dt * 2.5;
 
         // Stun timer
-        if (this.stunTimer > 0 && !this.isCluckFury) { this.stunTimer -= dt; this.attacking = false; }
-        else if (this.isCluckFury) { this.stunTimer = 0; }
-
-        // Cluck Fury logic
-        if (this.isCluckFury) {
-          this.cluckFuryTimer -= dt;
-          if (this.cluckFuryTimer <= 0) {
-            this.isCluckFury = false;
-          }
-          // Superhuman effects
-          this.stamina = Math.min(this.maxStamina, this.stamina + 50 * dt); // fast regen
-          this.attackCooldown = 0; // zero cooldown
-        }
+        if (this.stunTimer > 0) { this.stunTimer -= dt; this.attacking = false; }
 
         // Stagger at low HP
         if (this.hp / this.maxHp < 0.25) {
@@ -964,18 +944,6 @@
         const punchLeanY = this.currentPunch ? this.currentPunch.leanY * this.punchArmExt : 0;
         const lx = lean + punchLean; // combined lean X
         const ly = punchLeanY;       // combined lean Y
-
-        // Aura for Cluck Fury
-        if (this.isCluckFury) {
-          ctx.save();
-          ctx.globalAlpha = 0.4 + Math.sin(now * 0.01) * 0.2;
-          ctx.shadowBlur = 20; ctx.shadowColor = '#fff700';
-          ctx.strokeStyle = '#fff700'; ctx.lineWidth = 15 * s;
-          ctx.beginPath();
-          ctx.ellipse(lx, -30 * s + bob + ly, 20 * s, 40 * s, 0, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-        }
 
         const sk = flash ? '#fff' : this.colors.skin;
         const skShd = flash ? '#ddd' : (this.colors.skinShd || this.colors.skin);
@@ -1310,8 +1278,8 @@
       if (player) player.score = 0;
       if (enemy) enemy.score = 0;
       if (isOnlineMode) {
-        guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0, ability: 0 };
-        lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0, ability: 0 };
+        let guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
+        let lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
         remoteGameState = null;
       }
       resetRound();
@@ -1495,10 +1463,6 @@
 
         victim.takeDamage(dmg, attacker.x, attacker.currentPunch, isHead);
 
-        // Ability charging (now on attacker side)
-        if (attacker.name === 'CHESTER' && !attacker.isCluckFury) {
-          attacker.abilityCharge = Math.min(100, attacker.abilityCharge + dmg * 0.6);
-        }
 
         // Crowd reacts to hits
         boostCrowdExcitement(dmg * 0.008 + (isHead ? 0.05 : 0));
@@ -1765,20 +1729,6 @@
       ctx.fillText(Math.ceil(roundTimer).toString(), W / 2, 90);
       ctx.shadowBlur = 0;
 
-      // Ability Charge Bar (Only for Chester)
-      [leftBoxer, rightBoxer].forEach((b, i) => {
-        if (b.name === 'CHESTER') {
-          const sideW = 120, sideH = 6;
-          const sx = i === 0 ? margin : W - margin - sideW;
-          const sy = 65;
-          ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(sx, sy, sideW, sideH);
-          ctx.fillStyle = b.abilityCharge >= 100 ? '#fff700' : '#ffcc00';
-          ctx.fillRect(sx, sy, (b.abilityCharge / 100) * sideW, sideH);
-          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(sx, sy, sideW, sideH);
-          ctx.fillStyle = '#fff'; ctx.font = '600 8px "Outfit"'; ctx.textAlign = i === 0 ? 'left' : 'right';
-          ctx.fillText(b.abilityCharge >= 100 ? 'Q - READY!' : 'CLUCK FURY', i === 0 ? sx : sx + sideW, sy - 4);
-        }
-      });
     }
 
     function drawBar(ctx, x, y, w, h, val, max, color, align) {
@@ -2076,33 +2026,9 @@
       const dt_real = dt; // keep real dt for cutscenes
       lastTime = timestamp;
 
-      // Cutscene logic
-      if (cutsceneActive) {
-        cutsceneTimer -= dt_real;
-        if (cutsceneTimer <= 0) {
-          cutsceneActive = false;
-          cameraZoom = 1.0;
-        } else {
-          // Cinematic effects
-          const progress = 1 - (cutsceneTimer / 1.5);
-          if (progress < 0.2) cameraZoom = 1.0 + progress * 5; // Zoom in
-          else if (progress < 0.8) cameraZoom = 2.0; // Hold
-          else cameraZoom = 2.0 - (progress - 0.8) * 5; // Zoom out
-
-          if (cutsceneBoxer) {
-            cameraTargetX = cutsceneBoxer.x;
-            cameraTargetY = cutsceneBoxer.y - 40;
-          }
-          // Lerp camera
-          cameraX += (cameraTargetX - cameraX) * 0.15;
-          cameraY += (cameraTargetY - cameraY) * 0.15;
-        }
-        dt = 0; // Pause game logic during cutscene
-      } else {
-        cameraZoom += (1.0 - cameraZoom) * 0.1;
-        cameraX += (W / 2 - cameraX) * 0.1;
-        cameraY += (H / 2 - cameraY) * 0.1;
-      }
+      cameraZoom += (1.0 - cameraZoom) * 0.1;
+      cameraX += (W / 2 - cameraX) * 0.1;
+      cameraY += (H / 2 - cameraY) * 0.1;
 
       // Slow-mo
       if (slowMoTimer > 0) { slowMoTimer -= dt; dt *= slowMoScale; slowMoScale = Math.min(1, slowMoScale + 0.01); }
@@ -2268,14 +2194,6 @@
 
       ctx.restore();
 
-      // UI (Not affected by camera scale)
-      if (cutsceneActive) {
-        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#fff700'; ctx.font = '900 60px "Outfit"'; ctx.textAlign = 'center';
-        ctx.shadowColor = '#000'; ctx.shadowBlur = 20;
-        ctx.fillText('CLUCK FURY', W / 2, H / 2);
-        ctx.shadowBlur = 0;
-      }
 
       if (gameState === 'KO') drawKO(ctx);
     }
@@ -2484,14 +2402,6 @@
         if (inp.ac.hook > lastHostActionCounts.hook) boxer.punch('hook');
         if (inp.ac.upper > lastHostActionCounts.upper) boxer.punch('uppercut');
         if (inp.ac.body > lastHostActionCounts.body) boxer.punch('bodyshot');
-        if (inp.ac.dash > lastHostActionCounts.dash) boxer.punch('dashpunch');
-        if (inp.ac.ability > lastHostActionCounts.ability) {
-          if (boxer.name === 'CHESTER' && boxer.abilityCharge >= 100) {
-            boxer.isCluckFury = true; boxer.cluckFuryTimer = 8; boxer.abilityCharge = 0;
-            spawnFloatingText(boxer.x, boxer.headY - 40, 'CLUCK FURY!', '#fff700');
-            boostCrowdExcitement(0.5);
-          }
-        }
         lastHostActionCounts = Object.assign({}, inp.ac);
       }
     }
@@ -2618,20 +2528,10 @@
       }
 
       // Ability activation (Q)
-      if (gameState === 'FIGHTING' && e.code === 'KeyQ' && player.name === 'CHESTER' && player.abilityCharge >= 100 && !player.isCluckFury && !cutsceneActive) {
-        // Trigger Cinematic Cutscene
-        cutsceneActive = true;
-        cutsceneTimer = 1.5;
-        cutsceneBoxer = player;
-        cameraTargetX = player.x;
-        cameraTargetY = player.y - 40;
-
-        player.isCluckFury = true;
-        player.cluckFuryTimer = 8;
-        player.abilityCharge = 0;
-        spawnFloatingText(player.x, player.headY - 40, 'CLUCK FURY!', '#fff700');
-        boostCrowdExcitement(0.5);
-        if (isOnlineMode) PM.sendInput({ type: 'ability_activation' }); // simple sync for now
+      // Bodyshot (Q)
+      if (gameState === 'FIGHTING' && e.code === 'KeyQ') {
+        player.punch('bodyshot');
+        if (isOnlineMode) PM.sendInput({ type: 'bodyshot' });
       }
     });
     document.getElementById('btn-make-party').addEventListener('click', async () => {
@@ -2669,8 +2569,7 @@
       const map = { KeyE: 'cross', KeyR: 'hook', KeyF: 'upper', Space: 'jump' };
       if (map[e.code]) { guestActionCounts[map[e.code]]++; }
       if (e.code === 'KeyQ') {
-        if (player.name === 'CHESTER' && player.abilityCharge >= 100) guestActionCounts.ability++;
-        else guestActionCounts.body++;
+        guestActionCounts.body++;
       }
     });
     // LMB jab counter for guest
