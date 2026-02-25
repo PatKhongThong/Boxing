@@ -249,6 +249,8 @@
       color: #fff;
       font-family: 'Inter', sans-serif;
       outline: none;
+      -webkit-user-select: text;
+      user-select: text;
     }
 
     #auth-error {
@@ -459,6 +461,7 @@
     let lastDirTap = { dir: 0, time: 0 };
     let dashPunchReady = false;
     window.addEventListener('keydown', e => {
+      if (e.target.closest('input, textarea')) return;
       if (!keys[e.code]) keyDownTimes[e.code] = performance.now();
       keys[e.code] = true;
       e.preventDefault();
@@ -472,7 +475,10 @@
         lastDirTap = { dir, time: now };
       }
     });
-    window.addEventListener('keyup', e => { keys[e.code] = false; });
+    window.addEventListener('keyup', e => {
+      if (e.target.closest('input, textarea')) return;
+      keys[e.code] = false;
+    });
 
     // ── Mouse click (LMB = jab / dash punch, RMB = block) ──
     let mouseDown = false;
@@ -2621,6 +2627,7 @@
 
     // Space to start from charselect
     window.addEventListener('keydown', (e) => {
+      if (e.target.closest('input, textarea')) return;
       if (gameState === 'CHARSELECT' && e.code === 'Space') {
         if (isOnlineMode) {
           PM.playerReady = !PM.playerReady;
@@ -2680,11 +2687,11 @@
       PM.leave(); showPartyMenu = false; gameState = 'TITLE';
     });
     // Prevent game keys while typing room code
-    document.getElementById('party-password').addEventListener('keydown', e => e.stopPropagation());
-    document.getElementById('party-password').addEventListener('keyup', e => e.stopPropagation());
+    // (Handled by global listener tag check now)
 
     // Guest key tracking for one-shot actions
     window.addEventListener('keydown', e => {
+      if (e.target.closest('input, textarea')) return;
       if (!isOnlineMode || PM.isHost) return;
       const map = { KeyE: 'cross', KeyR: 'hook', KeyF: 'upper', Space: 'jump' };
       if (map[e.code]) { guestActionCounts[map[e.code]]++; }
@@ -2712,16 +2719,32 @@
     const passInput = document.getElementById('auth-password');
     const errorDiv = document.getElementById('auth-error');
 
+    // Redundant safety: stop propagation on all auth/party inputs
+    [emailInput, passInput, document.getElementById('party-password')].forEach(el => {
+      if (!el) return;
+      el.addEventListener('keydown', e => e.stopPropagation());
+      el.addEventListener('keyup', e => e.stopPropagation());
+    });
+
     async function localAuthRequest(endpoint, data) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
+          body: JSON.stringify(data),
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ message: 'SERVER RETURNED ' + res.status }));
+          return { success: false, message: (err.message || 'API ERROR').toUpperCase() };
+        }
         return await res.json();
       } catch (err) {
-        return { success: false, message: 'SERVER ERROR' };
+        if (err.name === 'AbortError') return { success: false, message: 'SERVER TIMEOUT' };
+        return { success: false, message: 'SERVER IS NOT RUNNING' };
       }
     }
 
