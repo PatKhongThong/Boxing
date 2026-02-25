@@ -2790,6 +2790,16 @@
         return;
       }
 
+      // Check if email is authorized for Chester (index 5)
+      const chester = CHARACTERS[5];
+      if (chester && chester.authorizedEmails) {
+        if (!chester.authorizedEmails.includes(email)) {
+          partyStatus.style.color = '#ff4444';
+          partyStatus.textContent = 'NOT CORRECT';
+          return;
+        }
+      }
+
       // Save as the current user
       localStorage.setItem('knockout_user', email);
       partyStatus.style.color = '#44ff44';
