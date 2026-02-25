@@ -712,6 +712,7 @@
         this.abilityCharge = 0;
         this.isCluckFury = false;
         this.cluckFuryTimer = 0;
+        this.barrageHits = 0; // rapid fire jabs in fury
       }
 
       get centerX() { return this.x; }
@@ -759,9 +760,18 @@
           if (progress < 0.3) this.punchArmExt = progress / 0.3;
           else if (progress > 0.7) this.punchArmExt = (1 - progress) / 0.3;
           else this.punchArmExt = 1;
+
+          // If hit registered and in barrage, reset immediately for next hit
+          if (this.hitRegistered && this.barrageHits > 0 && progress > 0.4) {
+            this.barrageHits--;
+            this.attackTimer = this.currentPunch.dur;
+            this.hitRegistered = false;
+            this.punchArmExt = 0;
+          }
+
           if (this.attackTimer <= 0) {
             this.attacking = false; this.currentPunch = null;
-            this.punchArmExt = 0; this.attackCooldown = 150;
+            this.punchArmExt = 0; this.attackCooldown = (this.barrageHits > 0 ? 0 : 150);
           }
         }
 
@@ -848,6 +858,14 @@
         this.stamina -= p.staCost;
         this.attacking = true; this.currentPunch = p;
         this.attackTimer = p.dur; this.hitRegistered = false;
+
+        // Mutated Jab Barrage
+        if (type === 'jab' && this.isCluckFury && this.name === 'CHESTER') {
+          this.barrageHits = 9; // 10 hits total
+        } else {
+          this.barrageHits = 0;
+        }
+
         // Dash punch forward burst
         if (p.dashForce) this.knockbackVx += this.facing * p.dashForce;
       }
@@ -943,22 +961,30 @@
         if (this.isCluckFury) {
           ctx.save();
           ctx.globalAlpha = 0.4 + Math.sin(Date.now() * 0.01) * 0.2;
-          ctx.shadowBlur = 20; ctx.shadowColor = '#fff700';
-          ctx.strokeStyle = '#fff700'; ctx.lineWidth = 15;
+          ctx.shadowBlur = 25; ctx.shadowColor = '#ff0000';
+          ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 15;
           ctx.beginPath();
           ctx.ellipse(lx, -30 + bob + ly, 20, 40, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          // Inner glow layer
+          ctx.globalAlpha = 0.2 + Math.sin(Date.now() * 0.015) * 0.15;
+          ctx.shadowBlur = 40; ctx.shadowColor = '#ff2200';
+          ctx.strokeStyle = '#ff4400'; ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.ellipse(lx, -30 + bob + ly, 25, 45, 0, 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
         }
 
-        const sk = flash ? '#fff' : this.colors.skin;
-        const skShd = flash ? '#ddd' : (this.colors.skinShd || this.colors.skin);
-        const mainC = flash ? '#fff' : this.colors.main;
-        const darkC = flash ? '#ddd' : this.colors.dark;
-        const gc = flash ? '#fff' : this.colors.glove;
-        const hairC = flash ? '#eee' : (this.colors.hair || this.colors.dark);
-        const shoeC = flash ? '#fff' : (this.colors.shoe || '#222');
-        const trimC = flash ? '#fff' : (this.colors.trim || this.colors.main);
+        const isMutated = this.isCluckFury && this.name === 'CHESTER';
+        const sk = flash ? '#fff' : (isMutated ? '#1a1a1a' : this.colors.skin);
+        const skShd = flash ? '#ddd' : (isMutated ? '#0d0d0d' : (this.colors.skinShd || this.colors.skin));
+        const mainC = flash ? '#fff' : (isMutated ? '#330000' : this.colors.main);
+        const darkC = flash ? '#ddd' : (isMutated ? '#1a0000' : this.colors.dark);
+        const gc = flash ? '#fff' : (isMutated ? '#ff0000' : this.colors.glove);
+        const hairC = flash ? '#eee' : (isMutated ? '#ff0000' : (this.colors.hair || this.colors.dark));
+        const shoeC = flash ? '#fff' : (isMutated ? '#1a0000' : (this.colors.shoe || '#222'));
+        const trimC = flash ? '#fff' : (isMutated ? '#ff0000' : (this.colors.trim || this.colors.main));
         const now = performance.now();
 
         ctx.save();
@@ -1464,7 +1490,7 @@
         const hitY = hb.y + hb.h / 2;
         const headZone = victim.headY + 5;
         let dmg = attacker.currentPunch.dmg * (attacker.dmgMult || 1);
-        if (attacker.isCluckFury) dmg *= 2.0; // 2x Damage buff during Cluck Fury
+        if (attacker.isCluckFury) dmg *= 9.0; // 2x Damage buff during Cluck Fury
         let isHead = hitY < headZone && !attacker.currentPunch.bodyShot;
         if (isHead) dmg *= attacker.currentPunch.headMult;
 
@@ -1472,7 +1498,7 @@
 
         // Ability charging (offensive)
         if (attacker.name === 'CHESTER' && !attacker.isCluckFury) {
-          attacker.abilityCharge = Math.min(100, attacker.abilityCharge + dmg * 1.2);
+          attacker.abilityCharge = Math.min(100, attacker.abilityCharge + dmg * 0.5);
         }
 
 
