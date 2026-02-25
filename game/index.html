@@ -507,7 +507,7 @@
     let isOnlineMode = false;
     let showPartyMenu = false;
     let syncCounter = 0;
-    const SYNC_RATE = 4;
+    const SYNC_RATE = 2; // Increased frequency (was 4)
     let remoteGameState = null,
       guestActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 },
       lastHostActionCounts = { jab: 0, cross: 0, hook: 0, upper: 0, body: 0, jump: 0, dash: 0 };
@@ -1526,8 +1526,8 @@
         spawnHitParticles(px, py, isHead ? '#ffff44' : '#ff8844', isHead ? 8 : 4);
         if (isHead && dmg > 15) flashAlpha = 0.3;
 
-        // KO check
-        if (victim.hp <= 0) {
+        // KO check (Host Authority)
+        if (victim.hp <= 0 && (!isOnlineMode || PM.isHost)) {
           victim.hp = 0;
           // Slow-mo on final hit
           slowMoTimer = 1.0;
@@ -2136,7 +2136,7 @@
       if (gameState === 'FIGHTING') {
         roundTimerAccum += dt;
         if (roundTimerAccum >= 1) { roundTimer--; roundTimerAccum -= 1; }
-        if (roundTimer <= 0) {
+        if (roundTimer <= 0 && (!isOnlineMode || PM.isHost)) {
           gameState = 'KO'; koTimer = 2;
           koTarget = player.hp >= enemy.hp ? enemy : player;
           slowMoTimer = 0.5; slowMoScale = 0.3;
@@ -2451,10 +2451,9 @@
         // Host should theoretically not call this as they are the source, but for safety:
         dBoxer(player, gs.p1); dBoxer(enemy, gs.p2);
         koTarget = gs.ko === 'p1' ? player : gs.ko === 'p2' ? enemy : null;
-      } else {
         // Guest: Swap P1 (Host) and P2 (Guest) to match local perspective
-        dBoxer(player, gs.p2);
-        dBoxer(enemy, gs.p1);
+        dBoxer(player, gs.p2, true); // true = local player prediction
+        dBoxer(enemy, gs.p1, false);
         koTarget = gs.ko === 'p2' ? player : gs.ko === 'p1' ? enemy : null;
       }
       roundNumber = gs.rn; roundTimer = gs.rt;
@@ -2464,8 +2463,21 @@
       lastAttacker = (gs.la === 'p1' && PM.isHost) || (gs.la === 'p2' && !PM.isHost) ? player : enemy;
       shakeX = gs.sx || 0; shakeY = gs.sy || 0; shakeDur = gs.sd || 0; flashAlpha = gs.fa || 0;
     }
-    function dBoxer(b, s) {
-      b.x = s.x; b.y = s.y; b.hp = s.hp; b.stamina = s.st; b.facing = s.f;
+    function dBoxer(b, s, isLocal) {
+      // For local players in online mode, trust local physics to prevent rubberbanding
+      // Only snap if the distance is too large (> 50px)
+      if (isLocal && isOnlineMode) {
+        const dist = Math.abs(b.x - s.x);
+        if (dist > 50) b.x = s.x; // snap if way off
+        b.hp = s.hp; b.stamina = s.st; // Stats are always authoritative
+        b.score = s.sc;
+        b.abilityCharge = s.bc || 0; b.isCluckFury = !!s.cf;
+        return;
+      }
+
+      // Remote character: Lerp position for smoothness
+      b.x += (s.x - b.x) * 0.3; b.y += (s.y - b.y) * 0.3;
+      b.hp = s.hp; b.stamina = s.st; b.facing = s.f;
       b.attacking = !!s.a; b.currentPunch = s.pn ? PUNCHES_BY_NAME[s.pn] : null;
       b.punchArmExt = s.pe; b.blocking = !!s.bl; b.hitFlash = s.hf ? 0.1 : 0;
       b.headSnapBack = s.hs; b.stunTimer = s.sn ? 0.2 : 0;
