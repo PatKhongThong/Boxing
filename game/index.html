@@ -1550,14 +1550,23 @@
         if (attacker.currentPunch.name === 'UPPERCUT') shakeI *= 1.5;
         triggerShake(shakeI, dmg * 12);
 
-        freezeFrames = Math.floor(dmg * 0.15);
+        // Skip freeze frames during barrage to keep the combo flowing
+        const inBarrage = attacker.barrageHits > 0;
+        if (!inBarrage) {
+          freezeFrames = Math.floor(dmg * 0.15);
+        }
 
         const px = hb.x + hb.w / 2, py = hb.y + hb.h / 2;
         spawnHitParticles(px, py, isHead ? '#ffff44' : '#ff8844', isHead ? 8 : 4);
         if (isHead && dmg > 15) flashAlpha = 0.3;
 
-        // KO check (Host Authority)
-        if (victim.hp <= 0 && (!isOnlineMode || PM.isHost)) {
+        // During barrage, keep victim alive until the final hit
+        if (inBarrage && victim.hp <= 0) {
+          victim.hp = 1; // Keep alive for remaining barrage hits
+        }
+
+        // KO check (Host Authority) — only after barrage is done
+        if (victim.hp <= 0 && !inBarrage && (!isOnlineMode || PM.isHost)) {
           victim.hp = 0;
           // Slow-mo on final hit
           slowMoTimer = 1.0;
