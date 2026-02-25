@@ -755,23 +755,24 @@
 
         // Attack timer
         if (this.attacking && !this.isStunned) {
+          const punchDur = (this.barrageHits > 0) ? this.currentPunch.dur * 0.25 : this.currentPunch.dur;
           this.attackTimer -= dt * 1000;
-          let progress = 1 - (this.attackTimer / this.currentPunch.dur);
+          let progress = 1 - (this.attackTimer / punchDur);
           if (progress < 0.3) this.punchArmExt = progress / 0.3;
           else if (progress > 0.7) this.punchArmExt = (1 - progress) / 0.3;
           else this.punchArmExt = 1;
 
-          // If hit registered and in barrage, reset immediately for next hit
-          if (this.hitRegistered && this.barrageHits > 0 && progress > 0.4) {
-            this.barrageHits--;
-            this.attackTimer = this.currentPunch.dur;
-            this.hitRegistered = false;
-            this.punchArmExt = 0;
-          }
-
           if (this.attackTimer <= 0) {
-            this.attacking = false; this.currentPunch = null;
-            this.punchArmExt = 0; this.attackCooldown = (this.barrageHits > 0 ? 0 : 150);
+            if (this.barrageHits > 0) {
+              // Fire next barrage hit immediately
+              this.barrageHits--;
+              this.attackTimer = this.currentPunch.dur * 0.25;
+              this.hitRegistered = false;
+              this.punchArmExt = 0;
+            } else {
+              this.attacking = false; this.currentPunch = null;
+              this.punchArmExt = 0; this.attackCooldown = 150;
+            }
           }
         }
 
@@ -1498,7 +1499,7 @@
 
         // Ability charging (offensive)
         if (attacker.name === 'CHESTER' && !attacker.isCluckFury) {
-          attacker.abilityCharge = Math.min(100, attacker.abilityCharge + dmg * 0.5);
+          attacker.abilityCharge = Math.min(100, attacker.abilityCharge + dmg * 3.5);
         }
 
 
