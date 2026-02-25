@@ -686,7 +686,8 @@
           main: '#ffffff', dark: '#dddddd', skin: '#ff8800', glove: '#ff2222',
           skinShd: '#cc6600', hair: '#ff2222', shoe: '#000000', trim: '#ffcc00'
         },
-        statBars: { SPD: 5, PWR: 5, HP: 5, STA: 5, DEF: 5 }
+        statBars: { SPD: 5, PWR: 5, HP: 5, STA: 5, DEF: 5 },
+        authorizedEmails: ['kasemsuwanp@gisthailand.org', 'biko@gisthailand.org', 'khongthongp@gisthailand.org']
       }
     ];
 
@@ -1890,6 +1891,7 @@
         const isSelected = i === selectedCharIdx;
         const isHover = charHoverIdx === i;
         const isEnemyChoice = isOnlineMode && PM.enemyCharIdx === i;
+        const isLocked = isCharLocked(ch);
 
         // Card background
         ctx.fillStyle = isSelected ? 'rgba(255,220,68,0.15)' : 'rgba(20,10,35,0.85)';
@@ -1901,6 +1903,8 @@
           ctx.shadowColor = C.gold; ctx.shadowBlur = 10 + Math.sin(now * 0.005) * 5;
         } else if (isEnemyChoice) {
           ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.setLineDash([5, 5]);
+        } else if (isLocked) {
+          ctx.strokeStyle = '#444'; ctx.lineWidth = 2; ctx.shadowBlur = 0;
         } else if (isHover) {
           ctx.strokeStyle = '#888'; ctx.lineWidth = 2; ctx.shadowBlur = 0;
         } else {
@@ -1917,12 +1921,12 @@
         }
 
         // Character name
-        ctx.fillStyle = isSelected ? C.gold : ch.colors.main;
+        ctx.fillStyle = isLocked ? '#666' : (isSelected ? C.gold : ch.colors.main);
         ctx.font = '900 24px "Outfit"'; ctx.textAlign = 'center';
         ctx.fillText(ch.name, cx + cardW / 2, cy + 30);
 
         // Title
-        ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.6; ctx.font = '700 12px "Outfit"';
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = isLocked ? 0.3 : 0.6; ctx.font = '700 12px "Outfit"';
         ctx.fillText(ch.title, cx + cardW / 2, cy + 48);
         ctx.globalAlpha = 1;
 
@@ -1931,6 +1935,12 @@
         const bob = Math.sin(now * 0.003 + i) * 5;
         ctx.save();
         ctx.translate(cx + cardW / 2, cy + 130 + bob);
+
+        // Apply grayscale if locked
+        if (isLocked) {
+          // Simplistic grayscale by reducing alpha or drawing a silhouette
+          ctx.globalAlpha = 0.4;
+        }
 
         // Shadow base
         const shdGrd = ctx.createRadialGradient(0, 30, 0, 0, 30, 25);
@@ -1978,9 +1988,23 @@
 
         ctx.restore();
 
+        // Lock Icon if restricted
+        if (isLocked) {
+          ctx.fillStyle = 'rgba(0,0,0,0.6)';
+          ctx.fillRect(cx, cy, cardW, cardH);
+
+          ctx.fillStyle = '#fff'; ctx.font = '32px "serif"';
+          ctx.textAlign = 'center';
+          ctx.fillText('🔒', cx + cardW / 2, cy + cardH / 2 + 10);
+
+          ctx.fillStyle = '#ff4444'; ctx.font = '700 10px "Outfit"';
+          ctx.fillText('LOCKED', cx + cardW / 2, cy + cardH / 2 + 40);
+        }
+
         // Description
-        ctx.fillStyle = '#fff'; ctx.font = '400 13px "Outfit"'; ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff'; ctx.globalAlpha = isLocked ? 0.2 : 1; ctx.font = '400 13px "Outfit"'; ctx.textAlign = 'center';
         ctx.fillText(ch.desc, cx + cardW / 2, cy + 205);
+        ctx.globalAlpha = 1;
 
         // Stats UI
         const statNames = Object.keys(ch.statBars);
@@ -1988,12 +2012,12 @@
         statNames.forEach((sn, si) => {
           const sv = ch.statBars[sn];
           const bsy = barStartY + si * 14;
-          ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '600 11px "Outfit"'; ctx.textAlign = 'left';
+          ctx.fillStyle = isLocked ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)'; ctx.font = '600 11px "Outfit"'; ctx.textAlign = 'left';
           ctx.fillText(sn.toUpperCase(), cx + 15, bsy + 4);
 
           // Custom stat segment drawing
           for (let seg = 0; seg < 5; seg++) {
-            ctx.fillStyle = seg < sv ? ch.colors.main : 'rgba(255,255,255,0.1)';
+            ctx.fillStyle = seg < sv ? (isLocked ? '#444' : ch.colors.main) : 'rgba(255,255,255,0.1)';
             const segX = cx + 80 + seg * 18;
             ctx.fillRect(segX, bsy - 3, 14, 6);
           }
@@ -2527,6 +2551,13 @@
       gameState = 'CHARSELECT';
     });
 
+    function isCharLocked(ch) {
+      if (!ch.authorizedEmails) return false;
+      const user = localStorage.getItem('knockout_user');
+      if (!user) return true; // Guests can't access restricted characters
+      return !ch.authorizedEmails.includes(user.toLowerCase());
+    }
+
     // Character select click handling
     canvas.addEventListener('click', (e) => {
       if (gameState !== 'CHARSELECT') return;
@@ -2547,6 +2578,11 @@
       for (let i = 0; i < CHARACTERS.length; i++) {
         const cx = drawStartX + i * (cardW + gap), cy = 55;
         if (scrollAdjustedMx >= cx && scrollAdjustedMx <= cx + cardW && my >= cy && my <= cy + cardH) {
+          if (isCharLocked(CHARACTERS[i])) {
+            triggerShake(5, 300); // Visual feedback that it's locked
+            spawnFloatingText(mx, my, 'LOCKED', '#ff4444');
+            return;
+          }
           selectedCharIdx = i;
           if (isOnlineMode) {
             PM.playerReady = false;
