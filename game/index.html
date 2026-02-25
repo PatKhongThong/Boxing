@@ -2092,19 +2092,19 @@
       // Store button region for click detection
       charSelectBtnRegion = { x: btnX, y: btnY, w: btnW, h: btnH };
 
-      // Test Mode button (Chester only) — draw ABOVE START FIGHT
+      // Test Mode button (Chester only) — beside START FIGHT
       const isChester = CHARACTERS[selectedCharIdx] && CHARACTERS[selectedCharIdx].name === 'CHESTER' && !isCharLocked(CHARACTERS[selectedCharIdx]);
       if (isChester && !isOnlineMode) {
-        const tbW = 140, tbH = 22;
-        const tbX = W / 2 - tbW / 2, tbY = btnY - tbH - 10;
+        const tbW = 100, tbH = btnH;
+        const tbX = btnX + btnW + 10, tbY = btnY;
         const pulse = 0.7 + Math.sin(performance.now() * 0.005) * 0.3;
         ctx.save();
-        ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 12 * pulse;
+        ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 10 * pulse;
         ctx.fillStyle = `rgba(200, 0, 0, ${pulse})`; ctx.fillRect(tbX, tbY, tbW, tbH);
         ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.strokeRect(tbX, tbY, tbW, tbH);
         ctx.restore();
-        ctx.fillStyle = '#fff'; ctx.font = '700 9px "Press Start 2P"'; ctx.textAlign = 'center';
-        ctx.fillText('⚡ TEST MODE ⚡', W / 2, tbY + 15);
+        ctx.fillStyle = '#fff'; ctx.font = '700 7px "Press Start 2P"'; ctx.textAlign = 'center';
+        ctx.fillText('TEST MODE', tbX + tbW / 2, tbY + 16);
         charSelectTestBtnRegion = { x: tbX, y: tbY, w: tbW, h: tbH };
       } else {
         charSelectTestBtnRegion = null;
