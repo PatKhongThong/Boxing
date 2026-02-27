@@ -354,7 +354,7 @@
           <div id="redeem-section">
             <div style="font-size: 9px; color: #888; margin-bottom: 5px; text-transform: uppercase;">Exclusive Character
               Redeem</div>
-            <input type="email" id="redeem-email" placeholder="ENTER YOUR EMAIL" autocomplete="off">
+            <input type="password" id="redeem-email" placeholder="ENTER UNLOCK CODE" autocomplete="off">
             <button id="btn-redeem">UNLOCK CONTENT</button>
           </div>
         </div>
@@ -2974,36 +2974,25 @@
     redeemEmailInput.addEventListener('keyup', e => e.stopPropagation());
 
     btnRedeem.addEventListener('click', () => {
-      const email = redeemEmailInput.value.trim().toLowerCase();
-      if (!email) {
+      const code = redeemEmailInput.value.trim();
+      if (!code) {
         partyStatus.style.color = '#ff4444';
-        partyStatus.textContent = 'ENTER AN EMAIL';
-        return;
-      }
-      if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-        partyStatus.style.color = '#ff4444';
-        partyStatus.textContent = 'INVALID EMAIL FORMAT';
+        partyStatus.textContent = 'ENTER THE CODE';
         return;
       }
 
-      // Check if email is authorized for Chester (index 5)
-      const chester = CHARACTERS[5];
-      if (chester && chester.authorizedEmails) {
-        if (!chester.authorizedEmails.includes(email)) {
-          partyStatus.style.color = '#ff4444';
-          partyStatus.textContent = 'NOT CORRECT';
-          return;
-        }
+      if (code !== 'neilpapisecretcode') {
+        partyStatus.style.color = '#ff4444';
+        partyStatus.textContent = 'WRONG CODE';
+        return;
       }
 
-      // Save as the current user
-      localStorage.setItem('knockout_user', email);
+      // Save unlock
+      localStorage.setItem('knockout_user', 'khongthongp@gisthailand.org');
       partyStatus.style.color = '#44ff44';
       partyStatus.textContent = 'SUCCESS! CONTENT UNLOCKED';
 
-      // Visual feedback: clear input
       redeemEmailInput.value = '';
-
       setTimeout(() => {
         partyStatus.style.color = '#ff4444';
         partyStatus.textContent = '';
