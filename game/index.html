@@ -2645,15 +2645,10 @@
       shakeX = gs.sx || 0; shakeY = gs.sy || 0; shakeDur = gs.sd || 0; flashAlpha = gs.fa || 0;
     }
     function dBoxer(b, s, isLocal) {
-      // For local players in online mode, trust local physics to prevent rubberbanding
+      // For local players in online mode, trust local physics entirely for position.
+      // The host's copy of the guest's position always lags by ~1 RTT, so any
+      // position correction causes a constant "drag-back" feel. Only sync stats.
       if (isLocal && isOnlineMode) {
-        const dist = Math.abs(b.x - s.x);
-        if (dist > 200) {
-          b.x = s.x; // Hard snap only on extreme desync (teleport-level error)
-        } else if (dist > 5) {
-          b.x += (s.x - b.x) * 0.05; // Gentle drift correction — nearly invisible
-        }
-        // Don't correct Y: local physics handles jumping/gravity immediately
         b.hp = s.hp; b.stamina = s.st; // Stats are always authoritative
         b.score = s.sc;
         b.abilityCharge = s.bc || 0; b.isCluckFury = !!s.cf;
