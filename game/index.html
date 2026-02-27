@@ -2699,6 +2699,11 @@
         boxer.currentPunch = inp.bpn ? PUNCHES_BY_NAME[inp.bpn] : null;
         boxer.punchArmExt = inp.bpe || 0;
         boxer.hitRegistered = !!inp.bhr;
+        // Keep attack alive on host: without this, update() sees attackTimer<=0 and
+        // immediately resets attacking=false before checkHits() can register the hit
+        if (boxer.attacking && boxer.currentPunch) {
+          boxer.attackTimer = Math.max(boxer.attackTimer, 50);
+        }
       }
       if (inp.bbl != null) boxer.blocking = !!inp.bbl;
 
