@@ -2626,6 +2626,7 @@
         // Host should theoretically not call this as they are the source, but for safety:
         dBoxer(player, gs.p1); dBoxer(enemy, gs.p2);
         koTarget = gs.ko === 'p1' ? player : gs.ko === 'p2' ? enemy : null;
+      } else {
         // Guest: Swap P1 (Host) and P2 (Guest) to match local perspective
         dBoxer(player, gs.p2, true); // true = local player prediction
         dBoxer(enemy, gs.p1, false);
