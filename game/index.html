@@ -1803,7 +1803,7 @@
       drawGlassPanel(W - margin + 10, 15, barW + 20, 75, 'right');
 
       drawBar(ctx, margin, 35, barW, barH, leftBoxer.hp, leftBoxer.maxHp, hpColor(leftBoxer.hp, leftBoxer.maxHp), 'left');
-      drawBar(ctx, margin, 52, barW * 0.7, 5, leftBoxer.stamina, leftBoxer.stamina, C.gold, 'left');
+      drawBar(ctx, margin, 52, barW * 0.7, 5, leftBoxer.stamina, leftBoxer.maxStamina, C.gold, 'left');
       drawName(ctx, margin, 75, leftBoxer.name, (leftBoxer === player ? C.p1 : C.p2), 'left');
 
       // Display Email
@@ -1815,7 +1815,7 @@
 
       const p2x = W - margin;
       drawBar(ctx, p2x, 35, barW, barH, rightBoxer.hp, rightBoxer.maxHp, hpColor(rightBoxer.hp, rightBoxer.maxHp), 'right');
-      drawBar(ctx, p2x, 52, barW * 0.7, 5, rightBoxer.stamina, rightBoxer.stamina, C.gold, 'right');
+      drawBar(ctx, p2x, 52, barW * 0.7, 5, rightBoxer.stamina, rightBoxer.maxStamina, C.gold, 'right');
       drawName(ctx, p2x, 75, rightBoxer.name, (rightBoxer === player ? C.p1 : C.p2), 'right');
 
       // Display Email
@@ -2352,8 +2352,9 @@
         enemy.facing = player.x > enemy.x ? 1 : -1;
         player.update(dt); enemy.update(dt);
 
-        // Host is source of truth for hits, but Guest also runs checks for immediate local effects
-        checkHits();
+        // Host is sole authority for hit detection — guest must NOT run checkHits
+        // or it will locally reduce HP which the host then "regens" back via state sync
+        if (!isOnlineMode || PM.isHost) checkHits();
         updateParticles(dt);
 
         // Host: sync state to guest
