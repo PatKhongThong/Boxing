@@ -2321,7 +2321,7 @@
         // Reset dash if no direction held
         if (!keys['KeyA'] && !keys['KeyD']) dashPunchReady = false;
 
-        // Online guest: send input
+        // Online guest: send input + own boxer state so host can render/hit-detect accurately
         if (isOnlineMode && !PM.isHost) {
           const inp = {
             left: keys['KeyA'] || keys['ArrowLeft'] ? 1 : 0,
@@ -2329,7 +2329,16 @@
             block: keys['KeyS'] || keys['ArrowDown'] || rmbDown ? 1 : 0,
             up: keys['KeyW'] || keys['ArrowUp'] ? 1 : 0,
             aimY: player.aimY,
-            ac: Object.assign({}, guestActionCounts)
+            ac: Object.assign({}, guestActionCounts),
+            // Guest box state — host uses this directly for rendering & hit detection
+            bx: player.x | 0, by: player.y | 0,
+            bgy: Math.round(player.groundY),
+            bf: player.facing,
+            ba: player.attacking ? 1 : 0,
+            bpn: player.currentPunch ? player.currentPunch.name : 0,
+            bpe: Math.round(player.punchArmExt * 100) / 100,
+            bbl: player.blocking ? 1 : 0,
+            bhr: player.hitRegistered ? 1 : 0
           };
           PM.sendInput(inp);
         }
@@ -2677,24 +2686,40 @@
     }
     function applyGuestInput(boxer, inp) {
       if (!inp) return;
-      boxer.blocking = false;
-      if (inp.left) boxer.move(-1);
-      if (inp.right) boxer.move(1);
-      if (inp.up) boxer.moveZ(-1); // W key: move up in ring (toward back)
-      if (inp.block) {
-        boxer.blocking = true;
-        if (!boxer._blockStarted) { boxer.blockStartTime = performance.now(); boxer._blockStarted = true; }
-      } else { boxer._blockStarted = false; }
+
+      // ── Direct boxer state from guest (most reliable — avoids re-simulation drift) ──
+      if (inp.bx != null) {
+        boxer.x += (inp.bx - boxer.x) * 0.5; // lerp to guest's reported position
+      }
+      if (inp.bgy != null) { boxer.groundY = inp.bgy; boxer.ringZ = inp.bgy - boxer.baseGroundY; }
+      if (inp.by != null) { boxer.y += (inp.by - boxer.y) * 0.5; }
+      if (inp.bf != null) boxer.facing = inp.bf;
+      if (inp.ba != null) {
+        boxer.attacking = !!inp.ba;
+        boxer.currentPunch = inp.bpn ? PUNCHES_BY_NAME[inp.bpn] : null;
+        boxer.punchArmExt = inp.bpe || 0;
+        boxer.hitRegistered = !!inp.bhr;
+      }
+      if (inp.bbl != null) boxer.blocking = !!inp.bbl;
+
+      // ── Fallback movement from keys (in case boxer state not yet in packet) ──
+      if (inp.bx == null) {
+        if (inp.left) boxer.move(-1);
+        if (inp.right) boxer.move(1);
+        if (inp.up) boxer.moveZ(-1);
+      }
+      if (inp.bbl == null) {
+        boxer.blocking = false;
+        if (inp.block) {
+          boxer.blocking = true;
+          if (!boxer._blockStarted) { boxer.blockStartTime = performance.now(); boxer._blockStarted = true; }
+        } else { boxer._blockStarted = false; }
+      }
       boxer.aimY = inp.aimY || 0;
-      // Process one-shot actions via counters
+
+      // ── One-shot actions via counters (punches not captured by boxer state above) ──
       if (inp.ac) {
         if (inp.ac.jump > lastHostActionCounts.jump) boxer.jump();
-        if (inp.ac.jab > lastHostActionCounts.jab) boxer.punch('jab');
-        if (inp.ac.cross > lastHostActionCounts.cross) boxer.punch('cross');
-        if (inp.ac.hook > lastHostActionCounts.hook) boxer.punch('hook');
-        if (inp.ac.upper > lastHostActionCounts.upper) boxer.punch('uppercut');
-        if (inp.ac.body > lastHostActionCounts.body) boxer.punch('bodyshot');
-        if (inp.ac.dash > lastHostActionCounts.dash) boxer.punch('dashpunch');
         if (inp.ac.ability > lastHostActionCounts.ability) {
           if (boxer.name === 'CHESTER' && boxer.abilityCharge >= 100) {
             boxer.isCluckFury = true; boxer.cluckFuryTimer = 8; boxer.abilityCharge = 0;
