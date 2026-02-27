@@ -1572,8 +1572,13 @@
           victim.hp = 1; // Keep alive for remaining barrage hits
         }
 
-        // KO check (Host Authority) — only after barrage is done
-        if (victim.hp <= 0 && !inBarrage && (!isOnlineMode || PM.isHost)) {
+        // In test mode, never let the dummy die at all
+        if (isTestMode && victim.hp <= 0) {
+          victim.hp = 1;
+        }
+
+        // KO check (Host Authority) — only after barrage is done, not in test mode
+        if (victim.hp <= 0 && !inBarrage && !isTestMode && (!isOnlineMode || PM.isHost)) {
           victim.hp = 0;
           // Slow-mo on final hit
           slowMoTimer = 1.0;
@@ -2641,10 +2646,14 @@
     }
     function dBoxer(b, s, isLocal) {
       // For local players in online mode, trust local physics to prevent rubberbanding
-      // Only snap if the distance is too large (> 50px)
       if (isLocal && isOnlineMode) {
         const dist = Math.abs(b.x - s.x);
-        if (dist > 50) b.x = s.x; // snap if way off
+        if (dist > 200) {
+          b.x = s.x; // Hard snap only on extreme desync (teleport-level error)
+        } else if (dist > 5) {
+          b.x += (s.x - b.x) * 0.05; // Gentle drift correction — nearly invisible
+        }
+        // Don't correct Y: local physics handles jumping/gravity immediately
         b.hp = s.hp; b.stamina = s.st; // Stats are always authoritative
         b.score = s.sc;
         b.abilityCharge = s.bc || 0; b.isCluckFury = !!s.cf;
