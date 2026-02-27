@@ -1265,7 +1265,14 @@
     let player, enemy;
     function resetFighters() {
       const ch = CHARACTERS[selectedCharIdx];
-      player = new Boxer(RING.x + 120, 1, {
+      // Guest is P2 (right side); Host is P1 (left side)
+      const isGuest = isOnlineMode && !PM.isHost;
+      const playerStartX = isGuest ? RING.x + RING.w - 120 : RING.x + 120;
+      const playerFacing = isGuest ? -1 : 1;
+      const enemyStartX = isGuest ? RING.x + 120 : RING.x + RING.w - 120;
+      const enemyFacing = isGuest ? 1 : -1;
+
+      player = new Boxer(playerStartX, playerFacing, {
         main: ch.colors.main, dark: ch.colors.dark, skin: ch.colors.skin, glove: ch.colors.glove,
         skinShd: ch.colors.skinShd, hair: ch.colors.hair, shoe: ch.colors.shoe, trim: ch.colors.trim
       }, ch.name, true);
@@ -1283,7 +1290,7 @@
       let cpuIdx = Math.floor(Math.random() * CHARACTERS.length);
       while (cpuIdx === selectedCharIdx && CHARACTERS.length > 1) cpuIdx = Math.floor(Math.random() * CHARACTERS.length);
       const cpuCh = isOnlineMode ? CHARACTERS[PM.enemyCharIdx] : CHARACTERS[cpuIdx];
-      enemy = new Boxer(RING.x + RING.w - 120, -1, {
+      enemy = new Boxer(enemyStartX, enemyFacing, {
         main: cpuCh.colors.main, dark: cpuCh.colors.dark, skin: cpuCh.colors.skin, glove: cpuCh.colors.glove,
         skinShd: cpuCh.colors.skinShd, hair: cpuCh.colors.hair, shoe: cpuCh.colors.shoe, trim: cpuCh.colors.trim
       }, isOnlineMode ? 'OPPONENT' : cpuCh.name, false);
@@ -2684,6 +2691,7 @@
         if (inp.ac.hook > lastHostActionCounts.hook) boxer.punch('hook');
         if (inp.ac.upper > lastHostActionCounts.upper) boxer.punch('uppercut');
         if (inp.ac.body > lastHostActionCounts.body) boxer.punch('bodyshot');
+        if (inp.ac.dash > lastHostActionCounts.dash) boxer.punch('dashpunch');
         if (inp.ac.ability > lastHostActionCounts.ability) {
           if (boxer.name === 'CHESTER' && boxer.abilityCharge >= 100) {
             boxer.isCluckFury = true; boxer.cluckFuryTimer = 8; boxer.abilityCharge = 0;
@@ -2909,10 +2917,13 @@
         else guestActionCounts.body++;
       }
     });
-    // LMB jab counter for guest
+    // LMB jab / dash counter for guest
     canvas.addEventListener('mousedown', e => {
       if (!isOnlineMode || PM.isHost) return;
-      if (e.button === 0) guestActionCounts.jab++;
+      if (e.button === 0) {
+        if (dashPunchReady) { guestActionCounts.dash++; dashPunchReady = false; }
+        else guestActionCounts.jab++;
+      }
     });
 
     // ── Start ──
