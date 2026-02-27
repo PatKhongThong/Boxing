@@ -2630,7 +2630,8 @@
         bp: Math.round(b.bobPhase * 10) / 10, br: Math.round(b.breathPhase * 10) / 10,
         sp: Math.round(b.staggerPhase * 10) / 10, vy: Math.round(b.vy * 10) / 10,
         gr: b.isGrounded ? 1 : 0, kb: Math.round(b.knockbackVx * 10) / 10, sc: b.score,
-        bc: Math.round(b.abilityCharge), cf: b.isCluckFury ? 1 : 0
+        bc: Math.round(b.abilityCharge), cf: b.isCluckFury ? 1 : 0,
+        gy: Math.round(b.groundY) // ring depth (groundY) for Z-distance hit check
       };
     }
     function applyReceivedGameState(gs) {
@@ -2672,12 +2673,14 @@
       b.bobPhase = s.bp; b.breathPhase = s.br; b.staggerPhase = s.sp;
       b.vy = s.vy; b.isGrounded = !!s.gr; b.knockbackVx = s.kb; b.score = s.sc;
       b.abilityCharge = s.bc || 0; b.isCluckFury = !!s.cf;
+      if (s.gy != null) { b.groundY = s.gy; b.ringZ = s.gy - b.baseGroundY; } // sync ring depth
     }
     function applyGuestInput(boxer, inp) {
       if (!inp) return;
       boxer.blocking = false;
       if (inp.left) boxer.move(-1);
       if (inp.right) boxer.move(1);
+      if (inp.up) boxer.moveZ(-1); // W key: move up in ring (toward back)
       if (inp.block) {
         boxer.blocking = true;
         if (!boxer._blockStarted) { boxer.blockStartTime = performance.now(); boxer._blockStarted = true; }
